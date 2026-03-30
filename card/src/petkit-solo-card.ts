@@ -1053,6 +1053,7 @@ static styles = css`
       border-radius: 4px;
       outline: none;
       background: white;
+      color: #333;
     }
     
     .edit-time:focus, .edit-name:focus, .edit-amount:focus {
@@ -1095,13 +1096,13 @@ static styles = css`
     }
     
     .edit-time::-webkit-datetime-edit-text {
-      color: var(--primary-text-color);
+      color: #333;
       padding: 0 1px;
     }
     
     .edit-time::-webkit-datetime-edit-hour-field,
     .edit-time::-webkit-datetime-edit-minute-field {
-      color: var(--primary-text-color);
+      color: #333;
       font-weight: bold;
       padding: 0 1px;
       background: transparent;
