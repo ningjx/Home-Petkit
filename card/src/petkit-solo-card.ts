@@ -20,12 +20,10 @@ import { PetkitSoloCardConfig, TimelineItem, TodaySummary, FeedingPlanItem, Feed
 export class PetkitSoloCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @property({ attribute: false }) private _config?: PetkitSoloCardConfig;
-  private _pendingToggles: Map<string, boolean> = new Map();
-  private _pendingUpdates: Map<string, { time: string; name: string; amount: number }> = new Map();
+  private _pendingPlanChanges: Map<string, { time: string; name: string; amount: number; enabled?: boolean; deleted?: boolean }> = new Map();
   private _editingItem: { itemId: string; field: 'time' | 'name' | 'amount'; time: string; name: string; amount: number } | null = null;
   private _originalItemData: { time: string; name: string; amount: number } | null = null;
   private _pendingNewItem: { itemId: string; time: string; name: string; amount: number } | null = null;
-  private _deletedPlanItems: Set<string> = new Set();
   private _saveTimeout: number | null = null;
 
   static getStubConfig(): PetkitSoloCardConfig {
@@ -233,10 +231,10 @@ return html`
         matchedPlan.actualAmount = record.real_amount;
         matchedPlan.completedAt = record.completed_at;
         
-        const pendingEnabled = this._pendingToggles.get(matchedPlan.itemId);
-        if (pendingEnabled !== undefined) {
-          matchedPlan.isEnabled = pendingEnabled;
-          matchedPlan.status = pendingEnabled ? 0 : 1;
+        const pendingChange = this._pendingPlanChanges.get(matchedPlan.itemId);
+        if (pendingChange?.enabled !== undefined) {
+          matchedPlan.isEnabled = pendingChange.enabled;
+          matchedPlan.status = pendingChange.enabled ? 0 : 1;
         } else {
           matchedPlan.isEnabled = record.status === 0;
           matchedPlan.status = record.status;
@@ -373,12 +371,12 @@ return html`
 
   /** 渲染时间线条目（紧凑版本） */
   private _renderTimelineItem(item: TimelineItem) {
-    const isPlanDeleted = this._deletedPlanItems.has(item.itemId) || item.itemType === 'deleted_plan';
+    const pendingChange = this._pendingPlanChanges.get(item.itemId);
+    const isPlanDeleted = pendingChange?.deleted || item.itemType === 'deleted_plan';
     
-    const pendingUpdate = this._pendingUpdates.get(item.itemId);
-    const displayTime = pendingUpdate?.time || item.time;
-    const displayName = pendingUpdate?.name || item.name;
-    const displayAmount = pendingUpdate?.amount ?? item.plannedAmount;
+    const displayTime = pendingChange?.time || item.time;
+    const displayName = pendingChange?.name || item.name;
+    const displayAmount = pendingChange?.amount ?? item.plannedAmount;
     
     const amount = item.actualAmount !== undefined ? item.actualAmount : displayAmount;
     const isManualFeed = item.itemType === 'manual';
@@ -632,7 +630,12 @@ return html`
     const day = new Date().getDay();
     const weekday = day === 0 ? 7 : day;
     
-    this._pendingToggles.set(item.itemId, newEnabled);
+    this._pendingPlanChanges.set(item.itemId, {
+      time: item.time,
+      name: item.name,
+      amount: item.plannedAmount,
+      enabled: newEnabled,
+    });
     this.requestUpdate();
     
     try {
@@ -641,9 +644,9 @@ return html`
         item_id: item.itemId,
         enabled: newEnabled
       });
-      this._pendingToggles.delete(item.itemId);
+      this._pendingPlanChanges.delete(item.itemId);
     } catch (error) {
-      this._pendingToggles.delete(item.itemId);
+      this._pendingPlanChanges.delete(item.itemId);
       this.requestUpdate();
       console.error('[PetkitSoloCard] 切换失败:', error);
       alert(`切换失败: ${error}`);
@@ -656,7 +659,8 @@ return html`
       return;
     }
     
-    if (this._deletedPlanItems.has(item.itemId)) {
+    const pendingChange = this._pendingPlanChanges.get(item.itemId);
+    if (pendingChange?.deleted) {
       return;
     }
     
@@ -675,7 +679,12 @@ return html`
       item_time: item.time
     });
     
-    this._deletedPlanItems.add(item.itemId);
+    this._pendingPlanChanges.set(item.itemId, {
+      time: item.time,
+      name: item.name,
+      amount: item.plannedAmount,
+      deleted: true,
+    });
     this.requestUpdate();
     
     try {
@@ -686,7 +695,7 @@ return html`
       console.log('[PetkitSoloCard] 删除计划成功');
     } catch (error) {
       console.error('[PetkitSoloCard] 删除计划失败:', error);
-      this._deletedPlanItems.delete(item.itemId);
+      this._pendingPlanChanges.delete(item.itemId);
       this.requestUpdate();
     }
   }
@@ -715,10 +724,10 @@ return html`
       return;
     }
     
-    const pendingUpdate = this._pendingUpdates.get(item.itemId);
-    const editTime = pendingUpdate?.time || item.time;
-    const editName = pendingUpdate?.name || item.name;
-    const editAmount = pendingUpdate?.amount ?? item.plannedAmount;
+    const pendingChange = this._pendingPlanChanges.get(item.itemId);
+    const editTime = pendingChange?.time || item.time;
+    const editName = pendingChange?.name || item.name;
+    const editAmount = pendingChange?.amount ?? item.plannedAmount;
     
     this._editingItem = {
       itemId: item.itemId,
@@ -822,13 +831,13 @@ return html`
       );
       
       if (hasChanges) {
-        this._pendingUpdates.set(editData.itemId, {
+        this._pendingPlanChanges.set(editData.itemId, {
           time: editData.time,
           name: editData.name,
           amount: editData.amount,
         });
         this.requestUpdate();
-        this._updateExistingItem(editData, originalData);
+        this._updateExistingItem(editData);
       }
     }
     
@@ -836,8 +845,7 @@ return html`
   }
   
   private async _updateExistingItem(
-    editData: { itemId: string; time: string; name: string; amount: number },
-    originalData?: { time: string; name: string; amount: number } | null
+    editData: { itemId: string; time: string; name: string; amount: number }
   ): Promise<void> {
     if (!this.hass) {
       return;
@@ -863,10 +871,10 @@ return html`
         name: editData.name,
       });
       console.log('[PetkitSoloCard] 更新计划成功');
-      this._pendingUpdates.delete(editData.itemId);
+      this._pendingPlanChanges.delete(editData.itemId);
     } catch (error) {
       console.error('[PetkitSoloCard] 更新计划失败:', error);
-      this._pendingUpdates.delete(editData.itemId);
+      this._pendingPlanChanges.delete(editData.itemId);
       this.requestUpdate();
     }
   }
@@ -895,15 +903,7 @@ return html`
       const weekdayNames = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
       const todayPlans = scheduleCn[weekdayNames[weekday]] || [];
       
-      const newItemTimeSeconds = this._pendingNewItem.time.split(':').reduce((acc: number, val: string, i: number) => {
-        return acc + parseInt(val) * (i === 0 ? 3600 : 60);
-      }, 0);
-      
-      const existingPlan = todayPlans.find((p: any) => {
-        const [h, m] = p.time.split(':');
-        const timeSeconds = parseInt(h) * 3600 + parseInt(m) * 60;
-        return Math.abs(timeSeconds - newItemTimeSeconds) < 60;
-      });
+      const existingPlan = todayPlans.find((p: any) => p.time === this._pendingNewItem!.time);
       
       if (existingPlan) {
         console.log('[PetkitSoloCard] 该时间点已存在计划，跳过保存');
