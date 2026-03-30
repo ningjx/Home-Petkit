@@ -616,9 +616,14 @@ return html`
       return;
     }
     
+    const newEnabled = !item.isEnabled;
+    
+    if (item.isEnabled === newEnabled) {
+      return;
+    }
+    
     const day = new Date().getDay();
     const weekday = day === 0 ? 7 : day;
-    const newEnabled = !item.isEnabled;
     
     this._pendingToggles.set(item.itemId, newEnabled);
     this.requestUpdate();
@@ -641,6 +646,10 @@ return html`
   /** 操作：删除计划 */
   private async _deletePlan(item: TimelineItem): Promise<void> {
     if (!this.hass || !this._config) {
+      return;
+    }
+    
+    if (this._deletedPlanItems.has(item.itemId)) {
       return;
     }
     
@@ -853,6 +862,31 @@ return html`
   private async _saveNewItem(): Promise<void> {
     if (!this.hass || !this._pendingNewItem) {
       return;
+    }
+    
+    const planEntity = this._config?.entity ? this.hass.states[this._config.entity] : null;
+    if (planEntity) {
+      const scheduleCn = planEntity.attributes?.schedule_cn || planEntity.attributes?.schedule || {};
+      const weekday = new Date().getDay() || 7;
+      const weekdayNames = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+      const todayPlans = scheduleCn[weekdayNames[weekday]] || [];
+      
+      const newItemTimeSeconds = this._pendingNewItem.time.split(':').reduce((acc: number, val: string, i: number) => {
+        return acc + parseInt(val) * (i === 0 ? 3600 : 60);
+      }, 0);
+      
+      const existingPlan = todayPlans.find((p: any) => {
+        const [h, m] = p.time.split(':');
+        const timeSeconds = parseInt(h) * 3600 + parseInt(m) * 60;
+        return Math.abs(timeSeconds - newItemTimeSeconds) < 60;
+      });
+      
+      if (existingPlan) {
+        console.log('[PetkitSoloCard] 该时间点已存在计划，跳过保存');
+        this._pendingNewItem = null;
+        this.requestUpdate();
+        return;
+      }
     }
     
     const day = new Date().getDay();
