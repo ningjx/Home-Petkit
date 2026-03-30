@@ -1,0 +1,106 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Petkit SOLO Feeder",
+        "description": "Please enter your Petkit account information",
+        "data": {
+          "username": "Account (Phone/Email)",
+          "password": "Password",
+          "region": "Region"
+        }
+      },
+      "device": {
+        "title": "Select Device",
+        "description": "Found {device_count} feeder devices, please select the device to add",
+        "data": {
+          "device_id": "Device"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password",
+      "connection_failed": "Cannot connect to Petkit server",
+      "no_devices": "No feeder devices found",
+      "unknown": "Unknown error occurred"
+    },
+    "abort": {
+      "already_configured": "Device already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "refresh_mode": "Refresh Mode",
+          "refresh_interval": "Refresh Interval (seconds, {min_interval}-{max_interval})"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "food_level": {
+        "name": "Food Level"
+      },
+      "last_feeding": {
+        "name": "Last Feeding"
+      },
+      "last_amount": {
+        "name": "Last Amount"
+      },
+      "today_count": {
+        "name": "Today Count"
+      },
+      "feeding_schedule": {
+        "name": "Feeding Schedule"
+      },
+      "feeding_history": {
+        "name": "Feeding History"
+      },
+      "real_amount_total": {
+        "name": "Real Amount Total"
+      },
+      "plan_amount_total": {
+        "name": "Plan Amount Total"
+      },
+      "add_amount_total": {
+        "name": "Add Amount Total"
+      },
+      "plan_real_amount_total": {
+        "name": "Plan Real Amount Total"
+      },
+      "wifi_ssid": {
+        "name": "WIFI SSID"
+      },
+      "wifi_rsq": {
+        "name": "WIFI Signal Strength"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online Status"
+      },
+      "low_food": {
+        "name": "Low Food Warning"
+      },
+      "battery_status": {
+        "name": "Battery Status"
+      },
+      "battery_power": {
+        "name": "Battery Power"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh Data"
+      }
+    },
+    "select": {
+      "feeding_plan": {
+        "name": "Feeding Plan"
+      }
+    }
+  }
+}

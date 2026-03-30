@@ -1,0 +1,113 @@
+add_feeding_item:
+  name: 新增喂食计划
+  description: 新增一条喂食计划项。
+  fields:
+    entry_id:
+      name: 配置条目ID
+      description: 可选，如果不指定则使用第一个可用配置
+    day:
+      name: 星期几
+      description: 1-7，分别代表周一到周日
+      required: true
+      example: 1
+    time:
+      name: 时间
+      description: 喂食时间，格式 HH:MM
+      required: true
+      example: "08:00"
+    amount:
+      name: 出粮量
+      description: 出粮量（克），范围 1-100
+      required: true
+      example: 10
+    name:
+      name: 计划名称
+      description: 可选，计划名称（如"早餐"）
+      example: "早餐"
+
+remove_feeding_item:
+  name: 删除喂食计划
+  description: 删除一条喂食计划项。
+  fields:
+    entry_id:
+      name: 配置条目ID
+      description: 可选，如果不指定则使用第一个可用配置
+    day:
+      name: 星期几
+      description: 1-7，分别代表周一到周日
+      required: true
+      example: 1
+    item_id:
+      name: 计划项ID
+      description: 计划项ID（通常是时间的秒数）
+      required: true
+      example: "28800"
+
+toggle_feeding_item:
+  name: 启用/禁用喂食计划
+  description: 启用或禁用一条喂食计划项。
+  fields:
+    entry_id:
+      name: 配置条目ID
+      description: 可选，如果不指定则使用第一个可用配置
+    day:
+      name: 星期几
+      description: 1-7，分别代表周一到周日
+      required: true
+      example: 1
+    item_id:
+      name: 计划项ID
+      description: 计划项ID（通常是时间的秒数）
+      required: true
+      example: "28800"
+    enabled:
+      name: 是否启用
+      description: true 启用，false 禁用
+      required: true
+      example: true
+
+update_feeding_item:
+  name: 更新喂食计划
+  description: 更新一条喂食计划项的时间、出粮量或名称。
+  fields:
+    entry_id:
+      name: 配置条目ID
+      description: 可选，如果不指定则使用第一个可用配置
+    day:
+      name: 星期几
+      description: 1-7，分别代表周一到周日
+      required: true
+      example: 1
+    item_id:
+      name: 计划项ID
+      description: 计划项ID（通常是时间的秒数）
+      required: true
+      example: "28800"
+    time:
+      name: 时间
+      description: 可选，新的喂食时间，格式 HH:MM
+      example: "08:30"
+    amount:
+      name: 出粮量
+      description: 可选，新的出粮量（克），范围 1-100
+      example: 15
+    name:
+      name: 计划名称
+      description: 可选，新的计划名称
+      example: "早餐"
+
+update_feeding_schedule:
+  name: 更新喂食计划（批量）
+  description: 更新指定周几的喂食计划（覆盖式更新）。day 参数为 1-7（周一到周日），schedule 为计划项列表，每个项包含 time（HH:MM格式）、portions（份数）和可选的 name（名称）。
+  fields:
+    entry_id:
+      name: 配置条目ID
+      description: 可选，如果不指定则使用第一个可用配置
+    day:
+      name: 星期几
+      description: 1-7，分别代表周一到周日
+      required: true
+    schedule:
+      name: 喂食计划
+      description: '该天的喂食计划列表，格式：[{"time": "08:00", "portions": 2, "name": "早餐"}, ...]'
+      required: true
