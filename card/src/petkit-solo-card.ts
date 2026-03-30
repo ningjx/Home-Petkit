@@ -21,6 +21,7 @@ export class PetkitSoloCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @property({ attribute: false }) private _config?: PetkitSoloCardConfig;
   private _pendingToggles: Map<string, boolean> = new Map();
+  private _pendingUpdates: Map<string, { time: string; name: string; amount: number }> = new Map();
   private _editingItem: { itemId: string; field: 'time' | 'name' | 'amount'; time: string; name: string; amount: number } | null = null;
   private _originalItemData: { time: string; name: string; amount: number } | null = null;
   private _pendingNewItem: { itemId: string; time: string; name: string; amount: number } | null = null;
@@ -373,7 +374,13 @@ return html`
   /** 渲染时间线条目（紧凑版本） */
   private _renderTimelineItem(item: TimelineItem) {
     const isPlanDeleted = this._deletedPlanItems.has(item.itemId) || item.itemType === 'deleted_plan';
-    const amount = item.actualAmount !== undefined ? item.actualAmount : item.plannedAmount;
+    
+    const pendingUpdate = this._pendingUpdates.get(item.itemId);
+    const displayTime = pendingUpdate?.time || item.time;
+    const displayName = pendingUpdate?.name || item.name;
+    const displayAmount = pendingUpdate?.amount ?? item.plannedAmount;
+    
+    const amount = item.actualAmount !== undefined ? item.actualAmount : displayAmount;
     const isManualFeed = item.itemType === 'manual';
     const canEdit = item.itemType === 'plan' && !isPlanDeleted;
     const editField = this._editingItem?.itemId === item.itemId ? this._editingItem?.field : null;
@@ -429,7 +436,7 @@ return html`
             @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this._cancelEdit(); }}
           />
         `
-      : html`<span class="time ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'time') : undefined}>${item.time}</span>`;
+      : html`<span class="time ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'time') : undefined}>${displayTime}</span>`;
 
     const nameEl = editField === 'name' && editData
       ? html`
@@ -443,7 +450,7 @@ return html`
             placeholder="名称"
           />
         `
-      : html`<span class="name ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'name') : undefined}>${item.name}</span>`;
+      : html`<span class="name ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'name') : undefined}>${displayName}</span>`;
 
     const amountEl = editField === 'amount' && editData
       ? html`
@@ -708,17 +715,22 @@ return html`
       return;
     }
     
+    const pendingUpdate = this._pendingUpdates.get(item.itemId);
+    const editTime = pendingUpdate?.time || item.time;
+    const editName = pendingUpdate?.name || item.name;
+    const editAmount = pendingUpdate?.amount ?? item.plannedAmount;
+    
     this._editingItem = {
       itemId: item.itemId,
       field: field,
-      time: item.time,
-      name: item.name,
-      amount: item.plannedAmount,
+      time: editTime,
+      name: editName,
+      amount: editAmount,
     };
     this._originalItemData = {
-      time: item.time,
-      name: item.name,
-      amount: item.plannedAmount,
+      time: editTime,
+      name: editName,
+      amount: editAmount,
     };
     this.requestUpdate();
   }
@@ -810,14 +822,23 @@ return html`
       );
       
       if (hasChanges) {
-        this._updateExistingItem(editData);
+        this._pendingUpdates.set(editData.itemId, {
+          time: editData.time,
+          name: editData.name,
+          amount: editData.amount,
+        });
+        this.requestUpdate();
+        this._updateExistingItem(editData, originalData);
       }
     }
     
     this.requestUpdate();
   }
   
-  private async _updateExistingItem(editData: { itemId: string; time: string; name: string; amount: number }): Promise<void> {
+  private async _updateExistingItem(
+    editData: { itemId: string; time: string; name: string; amount: number },
+    originalData?: { time: string; name: string; amount: number } | null
+  ): Promise<void> {
     if (!this.hass) {
       return;
     }
@@ -842,8 +863,11 @@ return html`
         name: editData.name,
       });
       console.log('[PetkitSoloCard] 更新计划成功');
+      this._pendingUpdates.delete(editData.itemId);
     } catch (error) {
       console.error('[PetkitSoloCard] 更新计划失败:', error);
+      this._pendingUpdates.delete(editData.itemId);
+      this.requestUpdate();
     }
   }
 
