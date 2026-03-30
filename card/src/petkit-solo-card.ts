@@ -664,11 +664,6 @@ return html`
       return;
     }
     
-    const confirmed = confirm(`确定要删除计划「${item.name}」(${item.time})吗？`);
-    if (!confirmed) {
-      return;
-    }
-    
     const day = new Date().getDay();
     const weekday = day === 0 ? 7 : day;
     
