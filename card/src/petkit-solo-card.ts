@@ -363,7 +363,11 @@ return html`
     return html`
       <div class="section">
         <div class="timeline-list">
-          ${timeline.map(item => this._renderTimelineItem(item))}
+          ${timeline.filter(item => {
+            const pendingChange = this._pendingPlanChanges.get(item.itemId);
+            const isPlanDeleted = pendingChange?.deleted || item.itemType === 'deleted_plan';
+            return !(isPlanDeleted && !item.isExecuted);
+          }).map(item => this._renderTimelineItem(item))}
         </div>
       </div>
     `;
