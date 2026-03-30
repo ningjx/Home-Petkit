@@ -22,6 +22,7 @@ from .const import (
     REFRESH_MODE_MANUAL,
     REGION_TIMEZONE_MAP,
     DEFAULT_TIMEZONE,
+    PLAN_REFRESH_DELAY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,8 +58,8 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
         self._feed_amount: int = 10
         self._timezone: float = 8.0
         self._timezone_str: str = "Asia/Shanghai"
+        self._plan_refresh_unsub: Any = None
         
-        # 自动初始化时区
         self._init_timezone()
         
         # aiohttp 会话
@@ -218,6 +219,9 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def cleanup(self) -> None:
         """清理资源."""
+        if self._plan_refresh_unsub:
+            self._plan_refresh_unsub()
+            self._plan_refresh_unsub = None
         if self._session:
             await self._session.close()
             self._session = None
@@ -322,6 +326,8 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
 
             _LOGGER.info("数据更新成功，设备：%s", device_data.name if hasattr(device_data, 'name') else self._device_id)
             
+            self._schedule_plan_refresh(device_data)
+            
             return {
                 "device_info": device_data,
                 "device_id": self._device_id,
@@ -341,6 +347,108 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
         """手动刷新数据."""
         _LOGGER.debug("手动刷新数据")
         await self.async_refresh()
+
+    def _get_today_plan_times(self, device_data: Any) -> list[datetime]:
+        """获取今天的喂食计划时间列表.
+        
+        Args:
+            device_data: 设备数据对象
+            
+        Returns:
+            今天的喂食计划时间列表（datetime 对象）
+        """
+        plan_times: list[datetime] = []
+        
+        try:
+            multi_feed_item = getattr(device_data, "multi_feed_item", None)
+            if not multi_feed_item:
+                return plan_times
+            
+            feed_daily_list = getattr(multi_feed_item, "feed_daily_list", [])
+            if not feed_daily_list:
+                return plan_times
+            
+            today_weekday = self.get_current_datetime().weekday() + 1
+            
+            for daily_list in feed_daily_list:
+                repeats = getattr(daily_list, "repeats", None)
+                if repeats != today_weekday:
+                    continue
+                
+                items = getattr(daily_list, "items", [])
+                suspended = getattr(daily_list, "suspended", 0)
+                if suspended:
+                    continue
+                
+                for item in items:
+                    time_seconds = getattr(item, "time", None)
+                    if time_seconds is None:
+                        continue
+                    
+                    hour = time_seconds // 3600
+                    minute = (time_seconds % 3600) // 60
+                    
+                    now = self.get_current_datetime()
+                    plan_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    plan_times.append(plan_time)
+                
+                break
+            
+            _LOGGER.debug("今天的喂食计划时间: %s", [t.strftime("%H:%M") for t in plan_times])
+            
+        except Exception as err:
+            _LOGGER.debug("获取喂食计划时间失败: %s", err)
+        
+        return plan_times
+
+    def _schedule_plan_refresh(self, device_data: Any) -> None:
+        """安排计划刷新.
+        
+        在每条喂食计划时间 + 2分钟后刷新数据，以获取执行结果。
+        
+        Args:
+            device_data: 设备数据对象
+        """
+        if self._plan_refresh_unsub:
+            self._plan_refresh_unsub()
+            self._plan_refresh_unsub = None
+        
+        plan_times = self._get_today_plan_times(device_data)
+        if not plan_times:
+            return
+        
+        now = self.get_current_datetime()
+        next_refresh_time: datetime | None = None
+        
+        for plan_time in plan_times:
+            refresh_time = plan_time + timedelta(seconds=PLAN_REFRESH_DELAY)
+            
+            if refresh_time > now:
+                next_refresh_time = refresh_time
+                break
+        
+        if not next_refresh_time:
+            _LOGGER.debug("今天没有需要刷新的计划了")
+            return
+        
+        _LOGGER.info(
+            "计划刷新已安排: %s",
+            next_refresh_time.strftime("%Y-%m-%d %H:%M:%S")
+        )
+        
+        from homeassistant.helpers.event import async_track_point_in_time
+        
+        async def _plan_refresh_callback(now: datetime) -> None:
+            """计划刷新回调."""
+            _LOGGER.info("执行计划刷新")
+            self._plan_refresh_unsub = None
+            await self.async_refresh()
+        
+        self._plan_refresh_unsub = async_track_point_in_time(
+            self.hass,
+            _plan_refresh_callback,
+            next_refresh_time,
+        )
 
     def set_feed_amount(self, amount: int) -> None:
         """设置出粮量."""
