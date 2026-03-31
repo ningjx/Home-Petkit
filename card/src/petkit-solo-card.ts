@@ -1043,12 +1043,9 @@ static styles = css`
       opacity: 0;
     }
     
-    .refresh-btn:hover {
-      box-shadow: 0 0 8px 2px rgba(3, 169, 244, 0.3);
-    }
-    
     .refresh-btn:hover .btn-svg {
       transform: rotate(180deg);
+      filter: drop-shadow(0 0 6px rgba(3, 169, 244, 0.5));
     }
     
     /* 手动喂食按钮 - 主要操作，突出显示 */
