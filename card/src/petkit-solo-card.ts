@@ -1034,25 +1034,15 @@ static styles = css`
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
-    /* 刷新按钮 - 旋转动画 */
+    /* 刷新按钮 - 旋转动画，悬停光效 */
     .refresh-btn {
-      width: 36px;
-      height: 36px;
-      background: var(--primary-color, #03a9f4);
-      color: white;
-      box-shadow: 0 0 0 1px rgba(3, 169, 244, 0.1), 0 0 8px 2px rgba(3, 169, 244, 0.3);
-    }
-    
-    .refresh-btn::before {
-      background: white;
+      width: 28px;
+      height: 28px;
+      color: var(--primary-text-color, #212121);
     }
     
     .refresh-btn:hover {
-      box-shadow: 0 0 0 1px rgba(3, 169, 244, 0.15), 0 0 12px 3px rgba(3, 169, 244, 0.4);
-    }
-    
-    .refresh-btn:active {
-      transform: scale(0.95);
+      box-shadow: 0 0 8px 2px rgba(3, 169, 244, 0.3);
     }
     
     .refresh-btn:hover .btn-svg {
