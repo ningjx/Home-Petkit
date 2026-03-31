@@ -157,7 +157,7 @@ copy_card() {
 copy_plugin() {
     log_step "复制后端插件到 HA..."
     
-    local plugin_src="$PROJECT_ROOT/custom_components/petkit_solo"
+    local plugin_src="$PROJECT_ROOT/custom_components/petkit_feeder"
     
     if [ ! -d "$plugin_src" ]; then
         log_error "插件目录不存在：$plugin_src"
@@ -167,10 +167,10 @@ copy_plugin() {
     mkdir -p "$CUSTOM_COMPONENTS_DIR"
     
     # 删除旧版本（尝试 sudo）
-    if [ -d "$CUSTOM_COMPONENTS_DIR/petkit_solo" ]; then
+    if [ -d "$CUSTOM_COMPONENTS_DIR/petkit_feeder" ]; then
         log_info "删除旧版本..."
-        rm -rf "$CUSTOM_COMPONENTS_DIR/petkit_solo" 2>/dev/null || \
-        sudo rm -rf "$CUSTOM_COMPONENTS_DIR/petkit_solo" 2>/dev/null || {
+        rm -rf "$CUSTOM_COMPONENTS_DIR/petkit_feeder" 2>/dev/null || \
+        sudo rm -rf "$CUSTOM_COMPONENTS_DIR/petkit_feeder" 2>/dev/null || {
             log_warning "无法删除旧版本，尝试覆盖..."
         }
     fi
@@ -179,7 +179,7 @@ copy_plugin() {
     cp -r "$plugin_src" "$CUSTOM_COMPONENTS_DIR/" 2>/dev/null || \
     sudo cp -r "$plugin_src" "$CUSTOM_COMPONENTS_DIR/"
     
-    local file_count=$(find "$CUSTOM_COMPONENTS_DIR/petkit_solo" -name "*.py" 2>/dev/null | wc -l)
+    local file_count=$(find "$CUSTOM_COMPONENTS_DIR/petkit_feeder" -name "*.py" 2>/dev/null | wc -l)
     log_success "后端插件已复制到 $CUSTOM_COMPONENTS_DIR ($file_count 个 Python 文件)"
     return 0
 }
@@ -190,7 +190,7 @@ copy_plugin() {
 verify_python() {
     log_step "检查 Python 语法..."
     
-    local plugin_dir="$PROJECT_ROOT/custom_components/petkit_solo"
+    local plugin_dir="$PROJECT_ROOT/custom_components/petkit_feeder"
     local all_ok=true
     
     for file in "$plugin_dir"/*.py; do
@@ -336,8 +336,8 @@ show_status() {
     fi
     
     # 后端插件
-    if [ -d "$CUSTOM_COMPONENTS_DIR/petkit_solo" ]; then
-        local file_count=$(find "$CUSTOM_COMPONENTS_DIR/petkit_solo" -name "*.py" | wc -l)
+    if [ -d "$CUSTOM_COMPONENTS_DIR/petkit_feeder" ]; then
+        local file_count=$(find "$CUSTOM_COMPONENTS_DIR/petkit_feeder" -name "*.py" | wc -l)
         echo "  ✅ 已部署 ($file_count 个 Python 文件)"
     else
         echo "  ❌ 未部署"
