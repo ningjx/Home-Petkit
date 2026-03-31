@@ -1034,7 +1034,7 @@ static styles = css`
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
-    /* 刷新按钮 - 旋转动画，悬停光效 */
+    /* 刷新按钮 - 旋转动画 */
     .refresh-btn {
       color: var(--primary-text-color, #212121);
     }
@@ -1045,7 +1045,6 @@ static styles = css`
     
     .refresh-btn:hover .btn-svg {
       transform: rotate(180deg);
-      filter: drop-shadow(0 0 6px rgba(3, 169, 244, 0.5));
     }
     
     /* 手动喂食按钮 - 主要操作，突出显示 */
