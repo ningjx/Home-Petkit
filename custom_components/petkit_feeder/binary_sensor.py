@@ -55,9 +55,12 @@ class PetkitBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         """初始化传感器."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_unique_id = f"{config_entry.entry_id}_{self.translation_key}"
+        
+        self._device_id = getattr(coordinator, '_device_id', 'unknown')
+        
+        self._attr_unique_id = f"{self._device_id}_{self.translation_key}"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
+            "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",

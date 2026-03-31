@@ -31,7 +31,7 @@ async def async_setup_entry(
 
 
 class PetkitRefreshButton(CoordinatorEntity, ButtonEntity):
-    """小佩 SOLO 刷新按钮."""
+    """小佩喂食器刷新按钮."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "refresh"
@@ -44,7 +44,10 @@ class PetkitRefreshButton(CoordinatorEntity, ButtonEntity):
         """初始化刷新按钮."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_unique_id = f"{config_entry.entry_id}_{BUTTON_REFRESH}"
+        
+        self._device_id = getattr(coordinator, '_device_id', 'unknown')
+        
+        self._attr_unique_id = f"{self._device_id}_{BUTTON_REFRESH}"
         self._attr_name = "刷新数据"
         self._attr_icon = "mdi:refresh"
 
@@ -56,7 +59,7 @@ class PetkitRefreshButton(CoordinatorEntity, ButtonEntity):
     def device_info(self):
         """返回设备信息."""
         return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
+            "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",
@@ -77,7 +80,10 @@ class PetkitManualFeedButton(CoordinatorEntity, ButtonEntity):
         """初始化手动出粮按钮."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_unique_id = f"{config_entry.entry_id}_manual_feed"
+        
+        self._device_id = getattr(coordinator, '_device_id', 'unknown')
+        
+        self._attr_unique_id = f"{self._device_id}_manual_feed"
         self._attr_name = "手动出粮"
         self._attr_icon = "mdi:food-drumstick"
 
@@ -90,7 +96,7 @@ class PetkitManualFeedButton(CoordinatorEntity, ButtonEntity):
     def device_info(self):
         """返回设备信息."""
         return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
+            "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",

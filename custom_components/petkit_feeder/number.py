@@ -55,7 +55,10 @@ class PetkitFeedAmountNumber(CoordinatorEntity, NumberEntity):
         """初始化数字输入."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_unique_id = f"{config_entry.entry_id}_feed_amount"
+        
+        self._device_id = getattr(coordinator, '_device_id', 'unknown')
+        
+        self._attr_unique_id = f"{self._device_id}_feed_amount"
         self._attr_name = "出粮克数"
 
     @property
@@ -73,7 +76,7 @@ class PetkitFeedAmountNumber(CoordinatorEntity, NumberEntity):
     def device_info(self):
         """返回设备信息."""
         return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
+            "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",

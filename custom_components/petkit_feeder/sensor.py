@@ -26,6 +26,7 @@ async def async_setup_entry(
     
     entities = [
         PetkitDeviceNameSensor(coordinator, config_entry),
+        PetkitDeviceIdSensor(coordinator, config_entry),
         PetkitLastFeedingSensor(coordinator, config_entry),
         PetkitLastAmountSensor(coordinator, config_entry),
         PetkitTodayCountSensor(coordinator, config_entry),
@@ -70,9 +71,12 @@ class PetkitSensorBase(CoordinatorEntity, SensorEntity):
         """初始化传感器."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._attr_unique_id = f"{config_entry.entry_id}_{self.translation_key}"
+        
+        self._device_id = getattr(coordinator, '_device_id', 'unknown')
+        
+        self._attr_unique_id = f"{self._device_id}_{self.translation_key}"
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
+            "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",
@@ -98,6 +102,21 @@ class PetkitDeviceNameSensor(PetkitSensorBase):
         if not device:
             return None
         return getattr(device, "name", None)
+
+
+class PetkitDeviceIdSensor(PetkitSensorBase):
+    """设备ID传感器."""
+
+    _attr_translation_key = "device_id"
+    _attr_icon = "mdi:identifier"
+
+    @property
+    def native_value(self) -> str | None:
+        """返回设备ID."""
+        device = self._get_device()
+        if not device:
+            return None
+        return str(getattr(device, "id", None))
 
 
 class PetkitFoodLevelSensor(PetkitSensorBase):
@@ -273,16 +292,61 @@ class PetkitFeedingScheduleSensor(PetkitSensorBase):
 
     @property
     def native_value(self) -> str:
-        """返回当前计划名称或状态."""
+        """返回下次喂食时间."""
         device = self._get_device()
         if not device:
-            return "未知"
+            return "离线"
         
         multi_feed_item = getattr(device, "multi_feed_item", None)
-        if multi_feed_item and hasattr(multi_feed_item, "is_executed"):
-            return "已启用" if multi_feed_item.is_executed else "未启用"
+        if not multi_feed_item:
+            return "无计划"
         
-        return "未知"
+        feed_daily_list = getattr(multi_feed_item, "feed_daily_list", None)
+        if not feed_daily_list:
+            return "无计划"
+        
+        now = datetime.now()
+        current_weekday = now.weekday() + 1  # Monday=1, Sunday=7
+        current_time = now.strftime("%H:%M")
+        current_seconds = now.hour * 3600 + now.minute * 60
+        
+        today_items = []
+        for daily_list in feed_daily_list:
+            repeats = getattr(daily_list, "repeats", None)
+            if repeats == current_weekday:
+                items = getattr(daily_list, "items", [])
+                for item in items:
+                    time_seconds = getattr(item, "time", 0)
+                    name = getattr(item, "name", "")
+                    amount = getattr(item, "amount", 0)
+                    hours = time_seconds // 3600
+                    minutes = (time_seconds % 3600) // 60
+                    time_str = f"{hours:02d}:{minutes:02d}"
+                    
+                    device_records = getattr(device, "device_records", None)
+                    is_executed = False
+                    if device_records:
+                        feed_records = getattr(device_records, "feed", None)
+                        if feed_records:
+                            for record in feed_records:
+                                record_items = getattr(record, "items", [])
+                                for ri in record_items:
+                                    ri_time = getattr(ri, "time", None)
+                                    ri_state = getattr(ri, "state", None)
+                                    if ri_time == time_seconds and ri_state:
+                                        is_executed = getattr(ri_state, "completed_at", None) is not None
+                                        break
+                    
+                    if not is_executed and time_seconds > current_seconds:
+                        today_items.append((time_seconds, time_str, name, amount))
+        
+        today_items.sort(key=lambda x: x[0])
+        
+        if today_items:
+            _, time_str, name, amount = today_items[0]
+            return f"{time_str} {name} {amount}g"
+        
+        return "今日无待喂食"
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -299,17 +363,7 @@ class PetkitFeedingScheduleSensor(PetkitSensorBase):
         if not feed_daily_list:
             return {}
 
-        # 周一到周日的名称映射
         weekday_names = {
-            1: "monday",
-            2: "tuesday",
-            3: "wednesday",
-            4: "thursday",
-            5: "friday",
-            6: "saturday",
-            7: "sunday",
-        }
-        weekday_names_cn = {
             1: "周一",
             2: "周二",
             3: "周三",
@@ -320,56 +374,40 @@ class PetkitFeedingScheduleSensor(PetkitSensorBase):
         }
 
         schedule = {}
-        schedule_cn = {}  # 中文版本，用于前端显示
 
         for daily_list in feed_daily_list:
             repeats = getattr(daily_list, "repeats", None)
+            suspended = getattr(daily_list, "suspended", 0)
             if not repeats or repeats < 1 or repeats > 7:
                 continue
 
-            weekday_key = weekday_names[repeats]
-            weekday_cn = weekday_names_cn[repeats]
-
+            weekday_name = weekday_names[repeats]
             items = getattr(daily_list, "items", [])
             schedule_items = []
-            schedule_items_cn = []
 
             for item in items:
                 time_seconds = getattr(item, "time", None)
-                amount = getattr(item, "amount", None)
+                amount = getattr(item, "amount", 0)
                 name = getattr(item, "name", "")
-                item_id_raw = getattr(item, "id", None)
-                item_id = f"s{item_id_raw}" if item_id_raw and not str(item_id_raw).startswith("s") else item_id_raw
+                item_id = getattr(item, "id", None)
 
                 if time_seconds is not None:
                     hours = time_seconds // 3600
                     minutes = (time_seconds % 3600) // 60
                     time_str = f"{hours:02d}:{minutes:02d}"
 
-                    schedule_items.append(
-                        {
-                            "id": item_id,
-                            "time": time_str,
-                            "portions": amount if amount is not None else 0,
-                            "name": name if name else "",
-                        }
-                    )
-                    schedule_items_cn.append(
-                        {
-                            "id": item_id,
-                            "time": time_str,
-                            "portions": amount if amount is not None else 0,
-                            "name": name if name else "",
-                        }
-                    )
+                    schedule_items.append({
+                        "id": item_id,
+                        "time": time_str,
+                        "name": name,
+                        "amount": amount,
+                        "suspended": suspended,
+                    })
 
-            schedule[weekday_key] = schedule_items
-            schedule_cn[weekday_cn] = schedule_items_cn
+            schedule[weekday_name] = schedule_items
 
         return {
-            "schedule": schedule,  # 英文键名，便于程序处理
-            "schedule_cn": schedule_cn,  # 中文键名，便于前端显示
-            "is_executed": getattr(multi_feed_item, "is_executed", False),
+            "schedule": schedule,
         }
 
 
@@ -381,38 +419,42 @@ class PetkitFeedingHistorySensor(PetkitSensorBase):
 
     @property
     def native_value(self) -> str:
-        """返回最后一条喂食记录的时间."""
+        """返回上次喂食时间."""
         device = self._get_device()
         if not device:
-            return "设备离线"
+            return "离线"
         
-        # 从 device_records 获取历史记录
         device_records = getattr(device, "device_records", None)
         if not device_records:
-            return "设备不支持"
+            return "无记录"
         
-        # 获取最新的喂食记录时间
+        latest_item = None
         latest_completed_at = None
         
         feed_records = getattr(device_records, "feed", None)
         if feed_records:
-            for record in feed_records:  # RecordsType
+            for record in feed_records:
                 items = getattr(record, "items", [])
-                for item in items:  # RecordsItems
+                for item in items:
                     state = getattr(item, "state", None)
                     if state:
                         completed_at = getattr(state, "completed_at", None)
                         if completed_at and (latest_completed_at is None or completed_at > latest_completed_at):
                             latest_completed_at = completed_at
+                            latest_item = item
         
-        if not latest_completed_at:
-            return "暂无记录"
+        if not latest_completed_at or not latest_item:
+            return "暂无喂食"
         
-        # completed_at 格式: "2026-03-10T22:00:19.000+0000"
         try:
-            # 解析 ISO 格式时间
             dt = datetime.fromisoformat(latest_completed_at.replace("Z", "+00:00"))
-            return dt.strftime("%Y-%m-%d %H:%M")
+            time_seconds = getattr(latest_item, "time", 0)
+            hours = time_seconds // 3600
+            minutes = (time_seconds % 3600) // 60
+            time_str = f"{hours:02d}:{minutes:02d}"
+            name = getattr(latest_item, "name", "")
+            real_amount = getattr(latest_item.state, "real_amount", 0) if latest_item.state else 0
+            return f"{time_str} {name} {real_amount}g"
         except (ValueError, TypeError):
             return "时间未知"
 

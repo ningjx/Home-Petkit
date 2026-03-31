@@ -45,8 +45,11 @@ class PetkitSwitchBase(CoordinatorEntity, SwitchEntity):
         """初始化开关."""
         super().__init__(coordinator)
         self._config_entry = config_entry
+        
+        self._device_id = getattr(coordinator, '_device_id', 'unknown')
+        
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
+            "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",
@@ -79,7 +82,7 @@ class PetkitLightModeSwitch(PetkitSwitchBase):
     def __init__(self, coordinator, config_entry) -> None:
         """初始化."""
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_light_mode"
+        self._attr_unique_id = f"{self._device_id}_light_mode"
         self._attr_name = "指示灯模式"
 
     @property
@@ -108,7 +111,7 @@ class PetkitFoodWarnSwitch(PetkitSwitchBase):
     def __init__(self, coordinator, config_entry) -> None:
         """初始化."""
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_food_warn"
+        self._attr_unique_id = f"{self._device_id}_food_warn"
         self._attr_name = "缺粮提醒"
 
     @property
@@ -137,7 +140,7 @@ class PetkitFeedNotifySwitch(PetkitSwitchBase):
     def __init__(self, coordinator, config_entry) -> None:
         """初始化."""
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_feed_notify"
+        self._attr_unique_id = f"{self._device_id}_feed_notify"
         self._attr_name = "喂食通知"
 
     @property
@@ -166,7 +169,7 @@ class PetkitManualLockSwitch(PetkitSwitchBase):
     def __init__(self, coordinator, config_entry) -> None:
         """初始化."""
         super().__init__(coordinator, config_entry)
-        self._attr_unique_id = f"{config_entry.entry_id}_manual_lock"
+        self._attr_unique_id = f"{self._device_id}_manual_lock"
         self._attr_name = "手动锁定"
 
     @property
