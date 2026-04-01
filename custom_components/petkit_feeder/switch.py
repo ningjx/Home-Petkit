@@ -83,7 +83,18 @@ class PetkitLightModeSwitch(PetkitSwitchBase):
         """初始化."""
         super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{self._device_id}_light_mode"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"switch.petkit_feeder_{self._device_id}_light_mode"
+        
         self._attr_name = "指示灯模式"
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Switch initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     @property
     def is_on(self) -> bool | None:
@@ -112,7 +123,18 @@ class PetkitFoodWarnSwitch(PetkitSwitchBase):
         """初始化."""
         super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{self._device_id}_food_warn"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"switch.petkit_feeder_{self._device_id}_food_warn"
+        
         self._attr_name = "缺粮提醒"
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Switch initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     @property
     def is_on(self) -> bool | None:
@@ -141,7 +163,18 @@ class PetkitFeedNotifySwitch(PetkitSwitchBase):
         """初始化."""
         super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{self._device_id}_feed_notify"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"switch.petkit_feeder_{self._device_id}_feed_notify"
+        
         self._attr_name = "喂食通知"
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Switch initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     @property
     def is_on(self) -> bool | None:
@@ -170,7 +203,18 @@ class PetkitManualLockSwitch(PetkitSwitchBase):
         """初始化."""
         super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{self._device_id}_manual_lock"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"switch.petkit_feeder_{self._device_id}_manual_lock"
+        
         self._attr_name = "手动锁定"
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Switch initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     @property
     def is_on(self) -> bool | None:

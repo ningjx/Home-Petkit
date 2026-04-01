@@ -48,8 +48,19 @@ class PetkitRefreshButton(CoordinatorEntity, ButtonEntity):
         self._device_id = getattr(coordinator, '_device_id', 'unknown')
         
         self._attr_unique_id = f"{self._device_id}_{BUTTON_REFRESH}"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"button.petkit_feeder_{self._device_id}_{BUTTON_REFRESH}"
+        
         self._attr_name = "刷新数据"
         self._attr_icon = "mdi:refresh"
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Button initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     async def async_press(self) -> None:
         """按下按钮时刷新数据."""
@@ -84,8 +95,19 @@ class PetkitManualFeedButton(CoordinatorEntity, ButtonEntity):
         self._device_id = getattr(coordinator, '_device_id', 'unknown')
         
         self._attr_unique_id = f"{self._device_id}_manual_feed"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"button.petkit_feeder_{self._device_id}_manual_feed"
+        
         self._attr_name = "手动出粮"
         self._attr_icon = "mdi:food-drumstick"
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Button initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     async def async_press(self) -> None:
         """按下按钮时手动出粮."""

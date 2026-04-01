@@ -59,12 +59,23 @@ class PetkitBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         self._device_id = getattr(coordinator, '_device_id', 'unknown')
         
         self._attr_unique_id = f"{self._device_id}_{self.translation_key}"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"binary_sensor.petkit_feeder_{self._device_id}_{self.translation_key}"
+        
         self._attr_device_info = {
             "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",
         }
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] BinarySensor initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     def _get_device(self) -> Feeder | None:
         """获取设备数据."""

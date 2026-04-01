@@ -28,7 +28,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 # 全局请求节流配置（单位：秒）
-PETKIT_REQUEST_INTERVAL = 10
+PETKIT_REQUEST_INTERVAL = 6
 _rate_limit_lock: asyncio.Lock | None = None
 _last_request_time: float | None = None
 

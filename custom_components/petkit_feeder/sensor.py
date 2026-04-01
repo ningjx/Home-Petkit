@@ -75,12 +75,24 @@ class PetkitSensorBase(CoordinatorEntity, SensorEntity):
         self._device_id = getattr(coordinator, '_device_id', 'unknown')
         
         self._attr_unique_id = f"{self._device_id}_{self.translation_key}"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"sensor.petkit_feeder_{self._device_id}_{self.translation_key}"
+        
         self._attr_device_info = {
             "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
             "model": "SOLO",
         }
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Sensor initialized: entity_id=%s, unique_id=%s, device_id=%s, translation_key=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+            self.translation_key,
+        )
 
     def _get_device(self) -> Feeder | None:
         """获取设备数据."""

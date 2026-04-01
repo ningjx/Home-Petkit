@@ -59,7 +59,18 @@ class PetkitFeedAmountNumber(CoordinatorEntity, NumberEntity):
         self._device_id = getattr(coordinator, '_device_id', 'unknown')
         
         self._attr_unique_id = f"{self._device_id}_feed_amount"
+        
+        # 直接设置 entity_id
+        self.entity_id = f"number.petkit_feeder_{self._device_id}_feed_amount"
+        
         self._attr_name = "出粮克数"
+        
+        _LOGGER.debug(
+            "[PetkitFeeder] Number initialized: entity_id=%s, unique_id=%s, device_id=%s",
+            self.entity_id,
+            self._attr_unique_id,
+            self._device_id,
+        )
 
     @property
     def native_value(self) -> float:
