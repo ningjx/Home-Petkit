@@ -1125,7 +1125,7 @@ static styles = css`
     .time {
       font-weight: bold;
       font-size: 12px;
-      color: var(--primary-text-color);
+      color: var(--primary-color);
       flex-shrink: 0;
       width: 55px;
     }
@@ -1143,7 +1143,7 @@ static styles = css`
     .amount {
       font-weight: bold;
       font-size: 11px;
-      color: var(--primary-color);
+      color: var(--primary-text-color);
       flex-shrink: 0;
       width: 40px;
       text-align: center;
