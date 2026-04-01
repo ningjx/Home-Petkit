@@ -5,6 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { ref } from 'lit/directives/ref.js';
 import { HomeAssistant } from 'custom-card-helpers';
 import { PetkitSoloCardConfig, TimelineItem, TodaySummary, FeedingPlanItem, FeedingRecord } from './types';
+import { getEntityId, getTodayDate, getTodayWeekday, TIME_TOLERANCE, SAVE_DELAY, DEFAULT_FEED_AMOUNT, WEEKDAY_NAMES } from './utils';
 
 // 注册到卡片选择器
 (window as any).customCards = (window as any).customCards || [];
@@ -27,11 +28,7 @@ export class PetkitFeederCard extends LitElement {
 
   private _getEntityId(entityType: string): string {
     if (!this._config) return '';
-    const deviceId = this._config.device_id;
-    if (deviceId) {
-      return `sensor.petkit_feeder_${deviceId}_${entityType}`;
-    }
-    return this._config.entity || '';
+    return getEntityId(this._config, entityType);
   }
 
   static getStubConfig(): PetkitSoloCardConfig {
@@ -141,28 +138,13 @@ return html`
     const now = new Date();
     const month = now.getMonth() + 1;
     const day = now.getDate();
-    const weekday = this._getTodayWeekday();
+    const weekday = getTodayWeekday();
     return `${month}月${day}日 ${weekday}`;
-  }
-
-  /** 获取今天是星期几（中文，使用本地时区） */
-  private _getTodayWeekday(): string {
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return weekdays[new Date().getDay()];
-  }
-
-  /** 获取今日日期字符串（YYYY-MM-DD，使用本地时区） */
-  private _getTodayDate(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
   }
 
   /** 解析喂食计划 */
   private _parseTodayPlans(attrs: any): FeedingPlanItem[] {
-    const weekday = this._getTodayWeekday();
+    const weekday = getTodayWeekday();
     const schedule = attrs.schedule || {};
     const todayPlans = schedule[weekday] || [];
 
@@ -223,9 +205,7 @@ return html`
       };
     });
 
-    const TIME_TOLERANCE = 120;
-
-    const recordItems: (TimelineItem | null)[] = records.map((record, index) => {
+const recordItems: (TimelineItem | null)[] = records.map((record, index) => {
       let matchedPlan: TimelineItem | undefined;
       
       if (record.src === 1) {
@@ -301,7 +281,7 @@ return html`
   }
 
   private _processTodayData(planAttrs: any, historyAttrs: any) {
-    const today = this._getTodayDate();
+    const today = getTodayDate();
     const plans = this._parseTodayPlans(planAttrs);
     const records = this._parseTodayRecords(historyAttrs, today);
     let timeline = this._mergeTimeline(plans, records);
