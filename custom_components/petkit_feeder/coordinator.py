@@ -27,12 +27,65 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# 全局请求节流配置（单位：秒）
-PETKIT_QUERY_INTERVAL = 0      # 查询类API间隔（0=不限制）
-PETKIT_COMMAND_INTERVAL = 6    # 设置类API间隔
+# API 频率限制配置
+PETKIT_REQUEST_INTERVAL = 6  # 默认请求间隔（秒）
+PETKIT_REQUEST_INTERVAL_WHITELIST = 0  # 白名单请求间隔（秒）
+
+# 白名单 API 端点（查询类 API，不做限制）
+# 这些 API 只读数据，不会改变设备状态
+RATE_LIMIT_WHITELIST = {
+    # 设备相关查询
+    "device/detail",
+    "device/record",
+    "device/stat",
+    "device/ota/check",
+    
+    # 家庭/账号相关查询
+    "group/family/list",
+    "user/info",
+    
+    # 喂食器相关查询
+    "feeding/status",
+    
+    # 媒体相关查询
+    "media/sound/list",
+    "media/live/feed",
+    
+    # 其他查询类 API
+    "iot/device/info",
+}
+
 _rate_limit_lock: asyncio.Lock | None = None
-_last_query_time: float | None = None
-_last_command_time: float | None = None
+_last_request_time: float | None = None
+
+
+def _is_whitelist_api(url: str) -> bool:
+    """检查 API 是否在白名单中（不需要频率限制）.
+    
+    Args:
+        url: API URL 或 endpoint
+        
+    Returns:
+        True 表示在白名单中（不限制），False 表示需要限制
+    """
+    # 提取 endpoint（去掉域名和参数）
+    # 例如：https://api.petkit.cn/device/detail -> device/detail
+    endpoint = url.split("?")[0]  # 去掉查询参数
+    endpoint = endpoint.rstrip("/")
+    
+    # 尝试从完整 URL 中提取 endpoint
+    if "/" in endpoint:
+        parts = endpoint.split("/")
+        # 取最后两部分作为 endpoint（如 device/detail）
+        if len(parts) >= 2:
+            endpoint = "/".join(parts[-2:])
+    
+    # 检查是否在白名单中
+    for whitelist_endpoint in RATE_LIMIT_WHITELIST:
+        if endpoint.endswith(whitelist_endpoint) or endpoint == whitelist_endpoint:
+            return True
+    
+    return False
 
 
 class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
@@ -180,11 +233,9 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
     def _wrap_api_with_rate_limiter(self) -> None:
         """为 PetKitClient 的 request 方法增加全局节流（排队 + 间隔）.
         
-        优化策略：
-        - 查询类请求（GET）：不限制（间隔0秒）
-        - 设置类请求（POST/PUT/DELETE）：限制间隔6秒
+        白名单内的 API（查询类）不做限制，其他 API（设置类）限制 6 秒一次。
         """
-        global _rate_limit_lock, _last_query_time, _last_command_time
+        global _rate_limit_lock, _last_request_time
 
         if not self._api or not getattr(self._api, "req", None):
             return
@@ -192,52 +243,47 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
         # 只初始化一次全局锁
         if _rate_limit_lock is None:
             _rate_limit_lock = asyncio.Lock()
-            _last_query_time = None
-            _last_command_time = None
+            _last_request_time = None
 
         # pypetkitapi 通过 self.req.request 发送 HTTP 请求
         original_request = self._api.req.request
 
-        async def rate_limited_request(self_req, method: str, *args, **kwargs):
-            """带全局间隔的 request 包装器.
-            
-            Args:
-                method: HTTP 方法（GET, POST, PUT, DELETE 等）
-            """
-            global _last_query_time, _last_command_time
+        async def rate_limited_request(self_req, *args, **kwargs):
+            """带全局间隔的 request 包装器（支持白名单）."""
             assert _rate_limit_lock is not None
+            global _last_request_time
 
-            # 判断是查询类还是设置类
-            is_query = method.upper() == "GET"
-            interval = PETKIT_QUERY_INTERVAL if is_query else PETKIT_COMMAND_INTERVAL
+            # 获取请求 URL（用于判断是否在白名单）
+            # request(method, url, ...) -> url 是第二个参数
+            url = args[1] if len(args) > 1 else kwargs.get("url", "")
             
+            # 检查是否在白名单中
+            is_whitelist = _is_whitelist_api(url)
+            request_interval = PETKIT_REQUEST_INTERVAL_WHITELIST if is_whitelist else PETKIT_REQUEST_INTERVAL
+
             async with _rate_limit_lock:
                 now = asyncio.get_running_loop().time()
                 
-                # 如果间隔为0，跳过限制
-                if interval > 0:
-                    last_time = _last_query_time if is_query else _last_command_time
-                    if last_time is not None:
-                        delta = now - last_time
-                        wait_for = interval - delta
-                        if wait_for > 0:
-                            request_type = "查询" if is_query else "设置"
-                            _LOGGER.debug(
-                                "PetKit API 触发节流（%s类），等待 %.2f 秒后再发送请求: %s",
-                                request_type, wait_for, method
-                            )
-                            await asyncio.sleep(wait_for)
+                # 如果请求间隔为 0，跳过等待
+                if request_interval > 0 and _last_request_time is not None:
+                    # 距上次请求的时间差
+                    delta = now - _last_request_time
+                    wait_for = request_interval - delta
+                    if wait_for > 0:
+                        _LOGGER.debug(
+                            "PetKit API 触发节流，等待 %.2f 秒后再发送请求 (endpoint: %s)",
+                            wait_for,
+                            url
+                        )
+                        await asyncio.sleep(wait_for)
 
                 # 真正发送请求
-                result = await original_request(method, *args, **kwargs)
+                result = await original_request(*args, **kwargs)
 
-                # 记录本次请求时间（只有间隔>0时才记录）
-                if interval > 0:
-                    if is_query:
-                        _last_query_time = asyncio.get_running_loop().time()
-                    else:
-                        _last_command_time = asyncio.get_running_loop().time()
-                
+                # 记录本次请求时间（只有非白名单 API 才记录）
+                if request_interval > 0:
+                    _last_request_time = asyncio.get_running_loop().time()
+                    
                 return result
 
         # 绑定为实例方法，替换底层 req 对象的 request 方法
