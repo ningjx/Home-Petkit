@@ -6,6 +6,7 @@ import { ref } from 'lit/directives/ref.js';
 import { HomeAssistant } from 'custom-card-helpers';
 import { PetkitSoloCardConfig, TimelineItem, TodaySummary, FeedingPlanItem, FeedingRecord } from './types';
 import { getEntityId, getTodayDate, getTodayWeekday, TIME_TOLERANCE, SAVE_DELAY, DEFAULT_FEED_AMOUNT, WEEKDAY_NAMES } from './utils';
+import { processTodayData, PendingChange } from './data';
 
 // 注册到卡片选择器
 (window as any).customCards = (window as any).customCards || [];
@@ -21,7 +22,7 @@ import { getEntityId, getTodayDate, getTodayWeekday, TIME_TOLERANCE, SAVE_DELAY,
 export class PetkitFeederCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @property({ attribute: false }) private _config?: PetkitSoloCardConfig;
-  private _pendingPlanChanges: Map<string, { time: string; name: string; amount: number; enabled?: boolean; deleted?: boolean; isNew?: boolean }> = new Map();
+  private _pendingPlanChanges: Map<string, PendingChange> = new Map();
   private _editingItem: { itemId: string; field: 'time' | 'name' | 'amount'; time: string; name: string; amount: number } | null = null;
   private _originalItemData: { time: string; name: string; amount: number } | null = null;
   private _saveTimeout: number | null = null;
@@ -84,9 +85,10 @@ export class PetkitFeederCard extends LitElement {
     }
 
     // 处理数据
-    const { timeline, summary } = this._processTodayData(
+    const { timeline, summary } = processTodayData(
       planEntity.attributes,
-      historyEntity?.attributes || {}
+      historyEntity?.attributes || {},
+      this._pendingPlanChanges
     );
 
     let deviceName = this._config.name;
@@ -140,207 +142,6 @@ return html`
     const day = now.getDate();
     const weekday = getTodayWeekday();
     return `${month}月${day}日 ${weekday}`;
-  }
-
-  /** 解析喂食计划 */
-  private _parseTodayPlans(attrs: any): FeedingPlanItem[] {
-    const weekday = getTodayWeekday();
-    const schedule = attrs.schedule || {};
-    const todayPlans = schedule[weekday] || [];
-
-    return todayPlans.map((item: any, index: number) => {
-      return {
-        id: `${weekday}_${index}`,
-        itemId: item.id,
-        name: item.name || `${weekday}喂食`,
-        time: item.time || '',
-        amount: item.amount || 0,
-        is_enabled: item.suspended !== 1,
-        is_completed: false,
-        enabled: item.suspended !== 1,
-      };
-    });
-  }
-
-  /** 解析今日喂食记录 */
-  private _parseTodayRecords(attrs: any, today: string): FeedingRecord[] {
-    const history = attrs.history || {};
-    const todayRecords = history[today] || [];
-
-    return todayRecords.map((item: any) => {
-      return {
-        id: item.id,
-        date: today,
-        time: item.time || '',
-        name: item.name || '',
-        amount: item.amount || 0,
-        real_amount: item.real_amount || item.amount || 0,
-        status: item.status || 0,
-        is_executed: item.is_executed !== false,
-        is_completed: item.is_completed === true,
-        completed_at: item.completed_at,
-        src: item.src,
-      };
-    });
-  }
-
-  /** 合并时间线 */
-  private _mergeTimeline(plans: FeedingPlanItem[], records: FeedingRecord[]): TimelineItem[] {
-    const planItems: TimelineItem[] = plans.map((plan, index) => {
-      const timeParts = plan.time.split(':');
-      const timeSeconds = parseInt(timeParts[0]) * 3600 + parseInt(timeParts[1]) * 60;
-      
-      return {
-        id: `plan_${plan.time}_${index}`,
-        itemId: `s${timeSeconds}`,
-        time: plan.time,
-        timeSeconds: timeSeconds,
-        name: plan.name,
-        itemType: 'plan' as const,
-        plannedAmount: plan.amount,
-        isExecuted: false,
-        isEnabled: plan.enabled,
-        canDisable: true,
-        canDelete: true,
-      };
-    });
-
-const recordItems: (TimelineItem | null)[] = records.map((record, index) => {
-      let matchedPlan: TimelineItem | undefined;
-      
-      if (record.src === 1) {
-        const recordTimeParts = record.time.split(':');
-        const recordTimeSeconds = parseInt(recordTimeParts[0]) * 3600 + parseInt(recordTimeParts[1]) * 60;
-        
-        matchedPlan = planItems.find(p => {
-          const timeDiff = Math.abs((p.timeSeconds || 0) - recordTimeSeconds);
-          const nameMatch = p.name === record.name;
-          const timeMatch = timeDiff <= TIME_TOLERANCE;
-          return nameMatch && timeMatch;
-        });
-      }
-
-      if (matchedPlan) {
-        matchedPlan.isExecuted = record.is_completed;
-        matchedPlan.actualAmount = record.real_amount;
-        matchedPlan.completedAt = record.completed_at;
-        
-        const pendingChange = this._pendingPlanChanges.get(matchedPlan.itemId);
-        if (pendingChange?.enabled !== undefined) {
-          matchedPlan.isEnabled = pendingChange.enabled;
-          matchedPlan.status = pendingChange.enabled ? 0 : 1;
-        } else {
-          matchedPlan.isEnabled = record.status === 0;
-          matchedPlan.status = record.status;
-        }
-        
-        return null;
-      }
-      
-      const timeParts = record.time.split(':');
-      const timeSeconds = parseInt(timeParts[0]) * 3600 + parseInt(timeParts[1]) * 60;
-      
-      if (record.src === 1) {
-        return {
-          id: `deleted_plan_${record.time}_${index}`,
-          itemId: `s${timeSeconds}`,
-          time: record.time,
-          timeSeconds: timeSeconds,
-          name: record.name || '已删除计划',
-          itemType: 'deleted_plan' as const,
-          plannedAmount: record.amount,
-          actualAmount: record.real_amount,
-          isExecuted: record.is_completed,
-          isEnabled: false,
-          completedAt: record.completed_at,
-          canDisable: false,
-          canDelete: false,
-        } as TimelineItem;
-      }
-      
-      return {
-        id: `manual_${record.time}_${index}`,
-        itemId: `s${timeSeconds}`,
-        time: record.time,
-        timeSeconds: timeSeconds,
-        name: record.name || '手动喂食',
-        itemType: 'manual' as const,
-        plannedAmount: 0,
-        actualAmount: record.real_amount,
-        isExecuted: record.is_completed,
-        isEnabled: true,
-        completedAt: record.completed_at,
-        canDisable: false,
-        canDelete: false,
-      } as TimelineItem;
-    });
-
-    const validItems = recordItems.filter((item): item is TimelineItem => item !== null);
-    return [...planItems, ...validItems]
-      .sort((a, b) => a.time.localeCompare(b.time));
-  }
-
-  private _processTodayData(planAttrs: any, historyAttrs: any) {
-    const today = getTodayDate();
-    const plans = this._parseTodayPlans(planAttrs);
-    const records = this._parseTodayRecords(historyAttrs, today);
-    let timeline = this._mergeTimeline(plans, records);
-    
-    this._pendingPlanChanges.forEach((change, itemId) => {
-      if (change.isNew && !change.deleted) {
-        const newItem: TimelineItem = {
-          id: itemId,
-          itemId: itemId,
-          time: change.time,
-          name: change.name,
-          itemType: 'plan',
-          plannedAmount: change.amount,
-          isExecuted: false,
-          isEnabled: true,
-          canDisable: true,
-          canDelete: true,
-        };
-        timeline.push(newItem);
-      }
-    });
-    timeline.sort((a, b) => a.time.localeCompare(b.time));
-    
-    const summary = this._getSummaryFromAttrs(historyAttrs, timeline);
-
-    return { timeline, summary };
-  }
-
-  private _getSummaryFromAttrs(historyAttrs: any, timeline: TimelineItem[]): TodaySummary {
-    const planAmount = historyAttrs.today_plan_amount || 0;
-    const actualAmount = historyAttrs.today_real_amount || 0;
-    const totalCount = historyAttrs.today_count || timeline.length;
-    const completedCount = historyAttrs.today_completed_count || timeline.filter(item => item.isExecuted).length;
-    const pendingCount = totalCount - completedCount;
-
-    const isOnline = timeline.length > 0;
-
-    const executedItems = timeline.filter(item => item.isExecuted && item.completedAt);
-    const lastFeedingItem = executedItems.length > 0
-      ? executedItems.reduce((latest, current) => 
-          current.completedAt! > latest.completedAt! ? current : latest
-        )
-      : undefined;
-
-    const manualAmount = timeline
-      .filter(item => item.itemType === 'manual' && item.isExecuted)
-      .reduce((sum, item) => sum + (item.actualAmount || 0), 0);
-
-    return {
-      planAmount,
-      actualAmount,
-      manualAmount,
-      isOnline,
-      lastFeedingTime: lastFeedingItem?.completedAt,
-      lastFeedingAmount: lastFeedingItem?.actualAmount,
-      totalCount,
-      completedCount,
-      pendingCount,
-    };
   }
 
   /** 渲染时间线 */
