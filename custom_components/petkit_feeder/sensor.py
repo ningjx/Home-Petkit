@@ -629,7 +629,7 @@ class PetkitPlanRealAmountTotalSensor(PetkitSensorBase):
     """计划实际喂食总量传感器."""
 
     _attr_translation_key = "plan_real_amount_total"
-    _attr_icon = "mdi:chart-check"
+    _attr_icon = "mdi:counter"
     _attr_native_unit_of_measurement = "g"
     _attr_state_class = "total_increasing"
 
