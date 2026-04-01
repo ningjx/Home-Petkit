@@ -103,9 +103,107 @@
         "name": "刷新数据"
       }
     },
-    "select": {
-      "feeding_plan": {
-        "name": "喂食计划"
+"select": {
+       "feeding_plan": {
+         "name": "喂食计划"
+       }
+     }
+   },
+  "services": {
+    "add_feeding_item": {
+      "name": "新增喂食计划",
+      "description": "添加一个新的喂食计划项",
+      "fields": {
+        "entry_id": {
+          "name": "配置条目 ID",
+          "description": "可选，指定要操作的配置条目 ID"
+        },
+        "day": {
+          "name": "星期",
+          "description": "喂食计划的星期几（1=周一，7=周日）"
+        },
+        "time": {
+          "name": "时间",
+          "description": "喂食时间，格式：HH:MM（如 08:00）"
+        },
+        "amount": {
+          "name": "出粮量",
+          "description": "每次出粮的克数（1-100克）"
+        },
+        "name": {
+          "name": "名称",
+          "description": "喂食计划的名称（如：早餐）"
+        }
+      }
+    },
+    "remove_feeding_item": {
+      "name": "删除喂食计划",
+      "description": "删除指定的喂食计划项",
+      "fields": {
+        "entry_id": {
+          "name": "配置条目 ID",
+          "description": "可选，指定要操作的配置条目 ID"
+        },
+        "day": {
+          "name": "星期",
+          "description": "喂食计划所在的星期几（1=周一，7=周日）"
+        },
+        "item_id": {
+          "name": "计划项 ID",
+          "description": "要删除的喂食计划项 ID"
+        }
+      }
+    },
+    "toggle_feeding_item": {
+      "name": "切换喂食计划状态",
+      "description": "启用或禁用指定的喂食计划项",
+      "fields": {
+        "entry_id": {
+          "name": "配置条目 ID",
+          "description": "可选，指定要操作的配置条目 ID"
+        },
+        "day": {
+          "name": "星期",
+          "description": "喂食计划所在的星期几（1=周一，7=周日）"
+        },
+        "item_id": {
+          "name": "计划项 ID",
+          "description": "要切换状态的喂食计划项 ID"
+        },
+        "enabled": {
+          "name": "启用状态",
+          "description": "true=启用，false=禁用"
+        }
+      }
+    },
+    "update_feeding_item": {
+      "name": "更新喂食计划",
+      "description": "更新指定喂食计划项的属性",
+      "fields": {
+        "entry_id": {
+          "name": "配置条目 ID",
+          "description": "可选，指定要操作的配置条目 ID"
+        },
+        "day": {
+          "name": "星期",
+          "description": "喂食计划所在的星期几（1=周一，7=周日）"
+        },
+        "item_id": {
+          "name": "计划项 ID",
+          "description": "要更新的喂食计划项 ID"
+        },
+        "time": {
+          "name": "时间",
+          "description": "新的喂食时间，格式：HH:MM"
+        },
+        "amount": {
+          "name": "出粮量",
+          "description": "新的出粮克数（1-100克）"
+        },
+        "name": {
+          "name": "名称",
+          "description": "新的喂食计划名称"
+        }
       }
     }
   }

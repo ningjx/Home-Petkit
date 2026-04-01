@@ -103,9 +103,107 @@
         "name": "Refresh Data"
       }
     },
-    "select": {
-      "feeding_plan": {
-        "name": "Feeding Plan"
+"select": {
+       "feeding_plan": {
+         "name": "Feeding Plan"
+       }
+     }
+   },
+  "services": {
+    "add_feeding_item": {
+      "name": "Add Feeding Item",
+      "description": "Add a new feeding schedule item",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional, specify the config entry ID to operate on"
+        },
+        "day": {
+          "name": "Day",
+          "description": "Day of the week for the feeding schedule (1=Monday, 7=Sunday)"
+        },
+        "time": {
+          "name": "Time",
+          "description": "Feeding time in HH:MM format (e.g., 08:00)"
+        },
+        "amount": {
+          "name": "Amount",
+          "description": "Amount of food in grams per feeding (1-100g)"
+        },
+        "name": {
+          "name": "Name",
+          "description": "Name of the feeding schedule (e.g., Breakfast)"
+        }
+      }
+    },
+    "remove_feeding_item": {
+      "name": "Remove Feeding Item",
+      "description": "Remove a feeding schedule item",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional, specify the config entry ID to operate on"
+        },
+        "day": {
+          "name": "Day",
+          "description": "Day of the week for the feeding schedule (1=Monday, 7=Sunday)"
+        },
+        "item_id": {
+          "name": "Item ID",
+          "description": "ID of the feeding schedule item to remove"
+        }
+      }
+    },
+    "toggle_feeding_item": {
+      "name": "Toggle Feeding Item",
+      "description": "Enable or disable a feeding schedule item",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional, specify the config entry ID to operate on"
+        },
+        "day": {
+          "name": "Day",
+          "description": "Day of the week for the feeding schedule (1=Monday, 7=Sunday)"
+        },
+        "item_id": {
+          "name": "Item ID",
+          "description": "ID of the feeding schedule item to toggle"
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "true=enable, false=disable"
+        }
+      }
+    },
+    "update_feeding_item": {
+      "name": "Update Feeding Item",
+      "description": "Update properties of a feeding schedule item",
+      "fields": {
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Optional, specify the config entry ID to operate on"
+        },
+        "day": {
+          "name": "Day",
+          "description": "Day of the week for the feeding schedule (1=Monday, 7=Sunday)"
+        },
+        "item_id": {
+          "name": "Item ID",
+          "description": "ID of the feeding schedule item to update"
+        },
+        "time": {
+          "name": "Time",
+          "description": "New feeding time in HH:MM format"
+        },
+        "amount": {
+          "name": "Amount",
+          "description": "New amount of food in grams (1-100g)"
+        },
+        "name": {
+          "name": "Name",
+          "description": "New name for the feeding schedule"
+        }
       }
     }
   }
