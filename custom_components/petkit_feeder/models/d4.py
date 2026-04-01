@@ -389,7 +389,7 @@ class D4Device(PetkitDevice):
         amount: int,
         api_client: Any,
     ) -> bool:
-        from .pypetkitapi.command import FeederCommand
+        from ..pypetkitapi.command import FeederCommand
         
         try:
             result = await api_client.send_api_request(
@@ -414,7 +414,7 @@ class D4Device(PetkitDevice):
         value: int,
         api_client: Any,
     ) -> bool:
-        from .pypetkitapi.command import DeviceCommand
+        from ..pypetkitapi.command import DeviceCommand
         
         try:
             result = await api_client.send_api_request(
