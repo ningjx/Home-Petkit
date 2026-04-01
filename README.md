@@ -8,6 +8,15 @@ Home Assistant 原生集成，支持小佩智能喂食器的完整控制。
 
 ![卡片预览](docs/card.png)
 
+## 支持设备
+
+| 设备 | 型号 | 状态 |
+|------|------|------|
+| Fresh Element Solo | D4 | ✅ 已支持 |
+| Fresh Element | D3 | 🚧 开发中 |
+| Fresh Element Duo | D4s | 🚧 开发中 |
+| Feeder Mini | Mini | 🚧 开发中 |
+
 ## 功能
 
 - **喂食计划管理** - 新增/删除/修改计划，自动同步一周

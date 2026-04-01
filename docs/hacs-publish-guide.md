@@ -19,17 +19,17 @@
 
 ### 1. 更新 manifest.json
 
-修改 GitHub URL 为你的实际仓库地址：
+已在 `manifest.json` 中配置：
 
 ```json
 {
   "domain": "petkit_feeder",
   "name": "小佩喂食器",
-  "codeowners": ["@你的GitHub用户名"],
+  "codeowners": ["@ningjx"],
   "config_flow": true,
-  "documentation": "https://github.com/你的用户名/petkit-ha",
+  "documentation": "https://github.com/ningjx/Home-Petkit",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/你的用户名/petkit-ha/issues",
+  "issue_tracker": "https://github.com/ningjx/Home-Petkit/issues",
   "requirements": ["m3u8>=3.0.0"],
   "version": "1.0.0"
 }
@@ -83,9 +83,9 @@ git push origin v1.0.0
 ### 方法 1：官方商店（推荐）
 
 1. Fork [hacs/integration](https://github.com/hacs/integration)
-2. 编辑 `custom_components_list.json`，添加你的仓库：
+2. 编辑 `custom_components_list.json`，添加仓库：
    ```json
-   "你的用户名/petkit-ha"
+   "ningjx/Home-Petkit"
    ```
 3. 创建 Pull Request
 
@@ -95,7 +95,7 @@ git push origin v1.0.0
 1. HACS → 集成 → 探索与下载仓库
 2. 点击右上角 "..."
 3. 选择 "自定义仓库"
-4. 输入仓库地址：`https://github.com/你的用户名/petkit-ha`
+4. 输入仓库地址：`https://github.com/ningjx/Home-Petkit`
 5. 类别选择 "集成"
 6. 点击 "添加"
 
