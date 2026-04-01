@@ -33,6 +33,12 @@ class PetkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
+    def __init__(self):
+        """初始化."""
+        self._feeder_devices = []
+        self._user_input = None
+        self._owner_info = None  # 存储主账号信息
+
     async def async_step_user(
         self, user_input: dict | None = None
     ) -> FlowResult:
@@ -58,13 +64,17 @@ class PetkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # 获取设备列表
                     await client.get_devices_data()
                     
+                    # 获取主账号信息（is_owner=1）
+                    self._owner_info = self._get_owner_info(client)
+                    
                     # 过滤 SOLO/喂食器设备
                     feeder_devices = []
                     for dev_id, device in client.petkit_entities.items():
                         if isinstance(device, Feeder):
+                            device_name = device.name if hasattr(device, 'name') else f"喂食器 {dev_id}"
                             feeder_devices.append({
                                 "id": str(dev_id),
-                                "name": device.name if hasattr(device, 'name') else f"喂食器 {dev_id}",
+                                "name": device_name,
                                 "type": device.type if hasattr(device, 'type') else "feeder",
                             })
                     
@@ -109,6 +119,21 @@ class PetkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    def _get_owner_info(self, client: PetKitClient) -> dict | None:
+        """获取主账号信息（is_owner=1）."""
+        try:
+            for account in client.account_data:
+                if account.user_list:
+                    for user in account.user_list:
+                        if user.is_owner == 1:
+                            return {
+                                "user_name": user.user_name or "未知用户",
+                                "user_id": user.user_id or 0,
+                            }
+        except Exception as e:
+            _LOGGER.warning("获取主账号信息失败：%s", e)
+        return None
+
     async def async_step_device(
         self, user_input: dict | None = None
     ) -> FlowResult:
@@ -136,16 +161,34 @@ class PetkitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_id: str,
     ) -> FlowResult:
         """创建配置条目."""
-        _LOGGER.info("配置成功，设备 ID: %s", device_id)
+        # 获取选中的设备名称
+        device_name = DEFAULT_NAME
+        for device in self._feeder_devices:
+            if device["id"] == device_id:
+                device_name = device["name"]
+                break
+        
+        # 构建配置条目标题：显示用户信息
+        if self._owner_info:
+            title = f"{self._owner_info['user_name']} (ID: {self._owner_info['user_id']})"
+        else:
+            title = DEFAULT_NAME
+        
+        _LOGGER.info("配置成功，用户：%s，设备：%s (ID: %s)", 
+                     title, device_name, device_id)
+        
         return self.async_create_entry(
-            title=DEFAULT_NAME,
+            title=title,
             data={
                 "username": self._user_input["username"],
                 # 存储密码以便后续协调器登录使用
                 # 如果以后要更安全的做法，可以考虑改成使用刷新 token 或让用户在选项里重新输入
                 "password": self._user_input["password"],
                 "device_id": device_id,
+                "device_name": device_name,  # 存储设备名称
                 "region": self._user_input.get("region", "CN"),  # 使用用户选择的 region
+                "user_name": self._owner_info.get("user_name") if self._owner_info else None,
+                "user_id": self._owner_info.get("user_id") if self._owner_info else None,
             },
             options={
                 CONF_REFRESH_MODE: REFRESH_MODE_AUTO,

@@ -88,12 +88,19 @@ class PetkitFeedAmountNumber(CoordinatorEntity, NumberEntity):
         """返回设备信息."""
         device = self.coordinator.data.get("device_info") if self.coordinator.data else None
         model = "Unknown"
-        if device and hasattr(device, "device_nfo") and device.device_nfo:
-            model = device.device_nfo.modele_name or "Unknown"
+        device_name = DEFAULT_NAME
+        
+        if device:
+            # 获取设备型号
+            if hasattr(device, "device_nfo") and device.device_nfo:
+                model = device.device_nfo.modele_name or "Unknown"
+            # 获取设备名称
+            if hasattr(device, "name") and device.name:
+                device_name = device.name
         
         return {
             "identifiers": {(DOMAIN, self._device_id)},
-            "name": DEFAULT_NAME,
+            "name": device_name,
             "manufacturer": "Petkit",
             "model": model,
         }
