@@ -41,11 +41,12 @@ RATE_LIMIT_WHITELIST = {
     "user/registerPushToken",
     
     # 设备查询
+    "device/getPetkitDevices",
+    "device/getDeviceServers",
     "d4/owndevices",
     "d4/device_detail",
     "d4/devicestate",
     "d4/refreshHomeV2",
-    "device/getDeviceServers",
     
     # 喂食相关查询
     "d4/feed",
