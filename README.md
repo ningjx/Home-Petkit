@@ -2,6 +2,8 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
+[English](README_EN.md) | 简体中文
+
 Home Assistant 原生集成，支持小佩智能喂食器的完整控制。
 
 ## 卡片预览
@@ -48,7 +50,7 @@ type: custom:petkit-feeder-card
 device_id: "276669"
 ```
 
-## 第三方API
+## 鸣谢
 
 本项目基于 [py-petkit-api](https://github.com/Jezza34000/py-petkit-api) 开发，感谢原作者的贡献。
 
