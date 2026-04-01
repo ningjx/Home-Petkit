@@ -69,11 +69,16 @@ class PetkitRefreshButton(CoordinatorEntity, ButtonEntity):
     @property
     def device_info(self):
         """返回设备信息."""
+        device = self.coordinator.data.get("device_info") if self.coordinator.data else None
+        model = "Unknown"
+        if device and hasattr(device, "device_nfo") and device.device_nfo:
+            model = device.device_nfo.modele_name or "Unknown"
+        
         return {
             "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
-            "model": "SOLO",
+            "model": model,
         }
 
 
@@ -117,9 +122,14 @@ class PetkitManualFeedButton(CoordinatorEntity, ButtonEntity):
     @property
     def device_info(self):
         """返回设备信息."""
+        device = self.coordinator.data.get("device_info") if self.coordinator.data else None
+        model = "Unknown"
+        if device and hasattr(device, "device_nfo") and device.device_nfo:
+            model = device.device_nfo.modele_name or "Unknown"
+        
         return {
             "identifiers": {(DOMAIN, self._device_id)},
             "name": DEFAULT_NAME,
             "manufacturer": "Petkit",
-            "model": "SOLO",
+            "model": model,
         }

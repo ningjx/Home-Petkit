@@ -47,13 +47,6 @@ class PetkitSwitchBase(CoordinatorEntity, SwitchEntity):
         self._config_entry = config_entry
         
         self._device_id = getattr(coordinator, '_device_id', 'unknown')
-        
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, self._device_id)},
-            "name": DEFAULT_NAME,
-            "manufacturer": "Petkit",
-            "model": "SOLO",
-        }
 
     def _get_device(self):
         """获取设备数据."""
@@ -71,6 +64,21 @@ class PetkitSwitchBase(CoordinatorEntity, SwitchEntity):
     async def _update_setting(self, key: str, value: int) -> bool:
         """更新设备设置."""
         return await self.coordinator.update_setting(key, value)
+
+    @property
+    def device_info(self):
+        """返回设备信息."""
+        device = self._get_device()
+        model = "Unknown"
+        if device and hasattr(device, "device_nfo") and device.device_nfo:
+            model = device.device_nfo.modele_name or "Unknown"
+        
+        return {
+            "identifiers": {(DOMAIN, self._device_id)},
+            "name": DEFAULT_NAME,
+            "manufacturer": "Petkit",
+            "model": model,
+        }
 
 
 class PetkitLightModeSwitch(PetkitSwitchBase):

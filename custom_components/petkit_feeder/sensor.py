@@ -79,13 +79,6 @@ class PetkitSensorBase(CoordinatorEntity, SensorEntity):
         # 直接设置 entity_id
         self.entity_id = f"sensor.petkit_feeder_{self._device_id}_{self.translation_key}"
         
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, self._device_id)},
-            "name": DEFAULT_NAME,
-            "manufacturer": "Petkit",
-            "model": "SOLO",
-        }
-        
         _LOGGER.debug(
             "[PetkitFeeder] Sensor initialized: entity_id=%s, unique_id=%s, device_id=%s, translation_key=%s",
             self.entity_id,
@@ -93,6 +86,21 @@ class PetkitSensorBase(CoordinatorEntity, SensorEntity):
             self._device_id,
             self.translation_key,
         )
+
+    @property
+    def device_info(self):
+        """返回设备信息."""
+        device = self._get_device()
+        model = "Unknown"
+        if device and hasattr(device, "device_nfo") and device.device_nfo:
+            model = device.device_nfo.modele_name or "Unknown"
+        
+        return {
+            "identifiers": {(DOMAIN, self._device_id)},
+            "name": DEFAULT_NAME,
+            "manufacturer": "Petkit",
+            "model": model,
+        }
 
     def _get_device(self) -> Feeder | None:
         """获取设备数据."""

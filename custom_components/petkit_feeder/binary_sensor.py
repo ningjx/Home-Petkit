@@ -63,19 +63,27 @@ class PetkitBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         # 直接设置 entity_id
         self.entity_id = f"binary_sensor.petkit_feeder_{self._device_id}_{self.translation_key}"
         
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, self._device_id)},
-            "name": DEFAULT_NAME,
-            "manufacturer": "Petkit",
-            "model": "SOLO",  #这里应该使用device_name='智能喂食器solo'这个字段自动设置设备model
-        }
-        
         _LOGGER.debug(
             "[PetkitFeeder] BinarySensor initialized: entity_id=%s, unique_id=%s, device_id=%s",
             self.entity_id,
             self._attr_unique_id,
             self._device_id,
         )
+
+    @property
+    def device_info(self):
+        """返回设备信息."""
+        device = self._get_device()
+        model = "Unknown"
+        if device and hasattr(device, "device_nfo") and device.device_nfo:
+            model = device.device_nfo.modele_name or "Unknown"
+        
+        return {
+            "identifiers": {(DOMAIN, self._device_id)},
+            "name": DEFAULT_NAME,
+            "manufacturer": "Petkit",
+            "model": model,
+        }
 
     def _get_device(self) -> Feeder | None:
         """获取设备数据."""
