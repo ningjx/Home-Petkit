@@ -694,36 +694,6 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
         
         return result
 
-    async def remove_feeding_item(
-        self,
-        day: int,
-        item_id: str,
-        sync_all_days: bool = True,
-    ) -> bool:
-        """删除喂食计划项（同步一周）."""
-        if not self._api or not self._device:
-            _LOGGER.error("API 或设备实例未初始化")
-            return False
-        
-        try:
-            existing_feed_daily_list = self._get_feed_daily_list_data()
-            
-            result = await self._device.remove_feeding_item(
-                day=day,
-                item_id=item_id,
-                api_client=self._api,
-                sync_all_days=sync_all_days,
-                existing_feed_daily_list=existing_feed_daily_list,
-            )
-            
-            if result:
-                await self.async_request_refresh()
-            
-            return result
-        except Exception as err:
-            _LOGGER.error("删除喂食计划失败: %s", err, exc_info=True)
-            return False
-
     async def toggle_feeding_item(
         self,
         day: int,
@@ -753,28 +723,78 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def save_feed(
         self,
-        days: list[int],
-        items: list[dict],
+        weekly_plan: list[dict],
     ) -> bool:
-        """保存喂食计划（批量）."""
+        """保存喂食计划（批量，支持7天独立配置）.
+        
+        Args:
+            weekly_plan: 周计划列表，每个元素包含 day, suspended, items
+            
+        Returns:
+            是否成功
+        """
         if not self._api or not self._device:
             _LOGGER.error("API 或设备实例未初始化")
             return False
         
         try:
-            result = await self._device.save_feed(
-                days=days,
-                items=items,
+            # # 补充缺失周天逻辑（暂注释，服务器可能已支持）
+            # existing_plan = self._get_feed_daily_list_data()
+            # input_days = set(p["day"] for p in weekly_plan)
+            # all_days = set(range(1, 8))
+            # missing_days = all_days - input_days
+            # 
+            # complete_plan = list(weekly_plan)
+            # for day in sorted(missing_days):
+            #     existing_day_plan = next(
+            #         (p for p in existing_plan if p["repeats"] == day),
+            #         None
+            #     )
+            #     if existing_day_plan:
+            #         complete_plan.append({
+            #             "day": day,
+            #             "suspended": existing_day_plan.get("suspended", 0),
+            #             "items": [
+            #                 {
+            #                     "time": self._seconds_to_time(item.get("time", 0)),
+            #                     "amount": item.get("amount", 0),
+            #                     "name": item.get("name", ""),
+            #                     "enabled": True,
+            #                 }
+            #                 for item in existing_day_plan.get("items", [])
+            #             ],
+            #         })
+            #     else:
+            #         complete_plan.append({
+            #             "day": day,
+            #             "suspended": 0,
+            #             "items": [],
+            #         })
+            # 
+            # complete_plan.sort(key=lambda x: x["day"])
+            
+            result = await self._device.save_feed_weekly(
+                weekly_plan=weekly_plan,
                 api_client=self._api,
             )
             
             if result:
                 await self.async_request_refresh()
             
+            _LOGGER.info(
+                "保存喂食计划成功: 传入 %d 天",
+                len(weekly_plan)
+            )
             return result
         except Exception as err:
             _LOGGER.error("保存喂食计划失败: %s", err, exc_info=True)
             return False
+    
+    def _seconds_to_time(self, seconds: int) -> str:
+        """将秒数转换为 HH:MM 格式."""
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
 
     def _parse_feeding_history(self, device_records) -> dict:
         """解析喂食历史记录.
