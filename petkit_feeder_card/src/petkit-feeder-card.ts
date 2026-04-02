@@ -60,7 +60,7 @@ export class PetkitFeederCard extends LitElement {
 
     // 获取实体数据
     const planEntityId = this._config.entity || this._getEntityId('feeding_schedule');
-    const historyEntityId = this._config.history_entity || this._getEntityId('feeding_history');
+    const historyEntityId = this._config.history_entity || this._getEntityId('feeding_records');
 
     const planEntity = this.hass.states[planEntityId];
     const historyEntity = historyEntityId ? this.hass.states[historyEntityId] : null;
@@ -656,7 +656,9 @@ return html`
     const weekday = new Date().getDay() || 7;
     const weekdayNames = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
     const schedule = planEntity.attributes?.schedule || {};
-    const existingPlans = schedule[weekdayNames[weekday]] || [];
+    const todayData = schedule[weekdayNames[weekday]] || {};
+    const existingPlans = todayData.items || [];
+    const daySuspended = todayData.suspended ?? 0;
     
     // 3. 合并待提交变更
     const allItems: Array<{ time: string; amount: number; name: string; enabled: boolean }> = [];
@@ -675,7 +677,7 @@ return html`
         time: pendingChange?.time || plan.time,
         amount: pendingChange?.amount ?? plan.amount,
         name: pendingChange?.name || plan.name,
-        enabled: pendingChange?.enabled !== undefined ? pendingChange.enabled : (plan.suspended !== 1),
+        enabled: pendingChange?.enabled !== undefined ? pendingChange.enabled : (daySuspended !== 1),
       };
       
       allItems.push(item);

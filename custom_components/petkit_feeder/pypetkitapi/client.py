@@ -542,7 +542,7 @@ class PetKitClient:
 
             if device_type in DEVICES_FEEDER:
                 main_tasks.append(self._fetch_device_data(device, Feeder))
-                record_tasks.append(self._fetch_device_data(device, FeederRecord))
+                record_tasks.append(self._fetch_weekly_feeding_records(device))
                 self._add_feeder_task_by_type(media_tasks, device_type, device)
 
             elif device_type in DEVICES_LITTER_BOX:
@@ -697,6 +697,90 @@ class PetKitClient:
             await handler(self, device, device_data, device_type)
         else:
             _LOGGER.error("Unknown data type: %s", data_class.data_type)
+
+    async def _fetch_weekly_feeding_records(self, device: Device) -> None:
+        """Fetch weekly feeding records (7 days) from the PetKit servers.
+        
+        串行调用 API 获取本周7天的喂食记录，通过限频器排队避免触发服务器限频。
+        
+        :param device: Device data.
+        """
+        device_type = device.device_type
+        
+        _LOGGER.debug(
+            "Fetching weekly feeding records for device: %s (id=%s)",
+            device_type, device.device_id
+        )
+        
+        endpoint = FeederRecord.get_endpoint(device_type)
+        if endpoint is None:
+            _LOGGER.debug("Endpoint not found for device type: %s", device_type)
+            return
+        
+        today = datetime.now()
+        weekday = today.weekday()
+        week_start = today - timedelta(days=weekday)
+        
+        dates = [
+            (week_start + timedelta(days=i)).strftime("%Y%m%d")
+            for i in range(7)
+        ]
+        
+        _LOGGER.debug("Weekly dates to fetch: %s", dates)
+        
+        all_feed_records = []
+        all_eat_records = []
+        
+        for date_str in dates:
+            query_param = FeederRecord.query_param(device, None, date_str)
+            
+            try:
+                response = await self.req.request(
+                    method=HTTPMethod.POST,
+                    url=f"{device_type}/{endpoint}",
+                    params=query_param,
+                    headers=await self.get_session_id(),
+                )
+                
+                _LOGGER.debug(
+                    "Feeding record response for date %s: %s",
+                    date_str, response
+                )
+                
+                if isinstance(response, dict):
+                    feed_list = response.get("feed", [])
+                    eat_list = response.get("eat", [])
+                    
+                    all_feed_records.extend(feed_list)
+                    all_eat_records.extend(eat_list)
+                    
+            except Exception as err:
+                _LOGGER.warning(
+                    "Failed to fetch feeding records for date %s: %s",
+                    date_str, err
+                )
+        
+        merged_record_data = {
+            "feed": all_feed_records,
+            "eat": all_eat_records,
+            "deviceType": device_type,
+            "typeCode": 0,
+        }
+        
+        merged_record = FeederRecord(**merged_record_data)
+        
+        entity = self.petkit_entities.get(device.device_id)
+        if entity and isinstance(entity, Feeder):
+            entity.device_records = merged_record
+            _LOGGER.debug(
+                "Weekly feeding records fetched OK for %s (%d feed records, %d eat records)",
+                device_type, len(all_feed_records), len(all_eat_records)
+            )
+        else:
+            _LOGGER.warning(
+                "Cannot assign device_records to entity of type %s",
+                type(entity),
+            )
 
     @data_handler(DEVICE_DATA)
     async def _handle_device_data(

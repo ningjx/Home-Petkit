@@ -62,8 +62,8 @@
       "feeding_schedule": {
         "name": "喂食计划"
       },
-      "feeding_history": {
-        "name": "喂食历史"
+      "feeding_records": {
+        "name": "喂食记录"
       },
       "real_amount_total": {
         "name": "实际喂食总量"
