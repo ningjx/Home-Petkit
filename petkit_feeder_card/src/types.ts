@@ -94,3 +94,29 @@ export interface PetkitSoloCardState {
   timeline: TimelineItem[];
   summary: TodaySummary;
 }
+
+/** 单天数据 */
+export interface DayData {
+  day: number;                    // 1-7
+  weekdayName: string;            // "周一" ~ "周日"
+  suspended: number;              // 0=启用, 1=暂停
+  timeline: TimelineItem[];       // 时间线
+  summary: TodaySummary;          // 统计
+}
+
+/** 周视图数据 */
+export interface WeeklyViewData {
+  days: Map<number, DayData>;     // key: 1-7
+  lastUpdated: number;            // 时间戳
+}
+
+/** 变更的一天 */
+export interface ChangedDay {
+  day: number;
+  items: Array<{
+    time: string;
+    amount: number;
+    name: string;
+    enabled: boolean;
+  }>;
+}

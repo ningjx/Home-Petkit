@@ -1,50 +1,56 @@
 /** 数据解析模块 */
 
 import { FeedingPlanItem, FeedingRecord } from '../types';
-import { getTodayWeekday } from '../utils';
+import { WEEKDAY_NAMES } from '../utils/constants';
 
 /**
- * 解析喂食计划
+ * 解析一周喂食计划
  * @param attrs 喂食计划实体属性
- * @returns 喂食计划列表
+ * @returns Map<周几数字, 喂食计划列表>
  */
-export function parseTodayPlans(attrs: any): FeedingPlanItem[] {
-  const weekday = getTodayWeekday();
+export function parseWeeklyPlans(attrs: any): Map<number, { suspended: number; items: FeedingPlanItem[] }> {
+  const result = new Map<number, { suspended: number; items: FeedingPlanItem[] }>();
   const schedule = attrs.schedule || {};
-  const todayData = schedule[weekday] || {};
-  const todayPlans = todayData.items || [];
-  const daySuspended = todayData.suspended ?? 0;
 
-  return todayPlans.map((item: any, index: number) => {
-    return {
-      id: `${weekday}_${index}`,
+  for (let day = 1; day <= 7; day++) {
+    const weekdayName = WEEKDAY_NAMES[day];
+    const dayData = schedule[weekdayName] || {};
+    const items = dayData.items || [];
+    const suspended = dayData.suspended ?? 0;
+
+    const feedingItems: FeedingPlanItem[] = items.map((item: any, index: number) => ({
+      id: `${day}_${index}`,
       itemId: item.id,
-      name: item.name || `${weekday}喂食`,
+      name: item.name || `${weekdayName}喂食`,
       time: item.time || '',
       amount: item.amount || 0,
-      is_enabled: daySuspended !== 1,
+      is_enabled: suspended !== 1,
       is_completed: false,
-      enabled: daySuspended !== 1,
-    };
-  });
+      enabled: suspended !== 1,
+    }));
+
+    result.set(day, { suspended, items: feedingItems });
+  }
+
+  return result;
 }
 
 /**
- * 解析今日喂食记录
+ * 解析指定日期的喂食记录
  * @param attrs 喂食记录实体属性
- * @param today 今日日期字符串
+ * @param date 日期字符串 (YYYY-MM-DD)
  * @returns 喂食记录列表
  */
-export function parseTodayRecords(attrs: any, today: string): FeedingRecord[] {
+export function parseDayRecords(attrs: any, date: string): FeedingRecord[] {
   const records = attrs.records || {};
-  const todayData = records[today] || {};
-  const todayItems = todayData.items || [];
+  const dayData = records[date] || {};
+  const items = dayData.items || [];
 
-  return todayItems.map((item: any) => {
+  return items.map((item: any) => {
     const state = item.state || {};
     return {
       id: item.id,
-      date: today,
+      date: date,
       time: item.time || '',
       name: item.name || '',
       amount: item.amount || 0,
@@ -56,4 +62,38 @@ export function parseTodayRecords(attrs: any, today: string): FeedingRecord[] {
       src: item.src,
     };
   });
+}
+
+/**
+ * 获取本周日期列表（周一到周日）
+ * @returns 日期字符串数组 ['YYYY-MM-DD', ...]
+ */
+export function getWeekDates(): string[] {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + mondayOffset + i);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    dates.push(`${year}-${month}-${day}`);
+  }
+  
+  return dates;
+}
+
+/**
+ * 根据日期获取周几数字
+ * @param dateStr 日期字符串 YYYY-MM-DD
+ * @returns 1-7
+ */
+export function getWeekdayFromDate(dateStr: string): number {
+  const parts = dateStr.split('-');
+  const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
 }

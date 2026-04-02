@@ -5,19 +5,24 @@ import { customElement, property } from 'lit/decorators.js';
 import { ref } from 'lit/directives/ref.js';
 import { HomeAssistant } from 'custom-card-helpers';
 import { PetkitSoloCardConfig, TimelineItem, TodaySummary } from './types';
-import { getEntityId, getTodayWeekday } from './utils';
-import { processTodayData, PendingChange } from './data';
+import { getEntityId, getTodayWeekdayNumber } from './utils';
+import { processWeeklyData } from './data';
 import { combineStyles } from './styles';
-import { saveFeed } from './services/plan';
+import { saveFeed, toggleFeedingItem } from './services/plan';
+import { WeeklyCacheManager } from './state';
+import { WEEKDAY_NAMES } from './utils/constants';
 
 @customElement('petkit-feeder-card')
 export class PetkitFeederCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @property({ attribute: false }) private _config?: PetkitSoloCardConfig;
-  private _pendingPlanChanges: Map<string, PendingChange> = new Map();
+
+  private _weeklyCache: WeeklyCacheManager = new WeeklyCacheManager();
+  private _selectedDay: number = 1;
   private _editingItem: { itemId: string; field: 'time' | 'name' | 'amount'; time: string; name: string; amount: number } | null = null;
   private _originalItemData: { time: string; name: string; amount: number } | null = null;
-  private _saveTimeout: number | null = null;
+  private _deleteDebounceTimer: number | null = null;
+  private _saveDebounceTimer: number | null = null;
 
   private _getEntityId(entityType: string): string {
     if (!this._config) return '';
@@ -58,7 +63,6 @@ export class PetkitFeederCard extends LitElement {
       return html`<div>加载中...</div>`;
     }
 
-    // 获取实体数据
     const planEntityId = this._config.entity || this._getEntityId('feeding_schedule');
     const historyEntityId = this._config.history_entity || this._getEntityId('feeding_records');
 
@@ -76,12 +80,22 @@ export class PetkitFeederCard extends LitElement {
       `;
     }
 
-    // 处理数据
-    const { timeline, summary } = processTodayData(
+    // 处理一周数据
+    const weeklyData = processWeeklyData(
       planEntity.attributes,
-      historyEntity?.attributes || {},
-      this._pendingPlanChanges
+      historyEntity?.attributes || {}
     );
+
+    // 初始化或更新缓存
+    if (!this._weeklyCache.originData) {
+      this._weeklyCache.initOrigin(weeklyData);
+      this._selectedDay = getTodayWeekdayNumber();
+    }
+
+    // 获取当前选中天的数据
+    const dayData = this._weeklyCache.getDayCache(this._selectedDay);
+    const timeline = dayData?.timeline || [];
+    const summary = dayData?.summary || this._emptySummary();
 
     let deviceName = this._config.name;
     if (!deviceName) {
@@ -93,7 +107,7 @@ export class PetkitFeederCard extends LitElement {
       deviceName = planEntity.attributes.friendly_name || '小佩喂食器';
     }
 
-return html`
+    return html`
       <ha-card @focusout=${this._handleCardFocusOut}>
         <div class="header">
           <span class="header-title">${deviceName}</span>
@@ -114,12 +128,13 @@ return html`
               title="手动喂食"
             >
               <svg viewBox="150 150 724 724" class="btn-svg">
-                <path d="M431.424 246.336c36.576-14.208 74.112-1.024 107.04 40.48l-0.32-0.384-2.016-2.464 7.264-3.84c42.432-21.44 83.84-22.304 112 16.128l0.864 1.248 3.552-1.92c34.24-17.376 75.168-2.144 116.832 50.304l5.024 6.496 3.2 4.416c4.16 6.848 6.4 14.4 6.4 22.272l-0.128-2.752 1.76 13.76 2.56 17.664c0.96 6.176 1.984 12.608 3.104 19.328 6.4 38.24 14.368 76.448 24 111.968 9.216 34.08 19.52 63.808 30.24 86.816l2.72 5.76 1.504 3.744c1.6 4.224 2.848 8.448 3.616 12.736 0.608 3.104 0.928 6.176 0.928 9.248 0 69.312-162.336 126.272-343.552 128.352l-10.272 0.064c-186.88 0-353.888-55.232-353.888-125.536 0-7.136 1.408-14.112 3.904-21.76 1.216-3.68 2.56-7.136 4.48-11.936l3.648-9.056c0.736-1.92 1.12-3.2 1.792-5.44a786.496 786.496 0 0 0 43.648-166.016c2.72-18.432 4.448-35.104 5.408-49.664l0.672-13.44 0.096-3.84 0.32-5.184a43.52 43.52 0 0 1 7.264-18.912l2.272-3.488c4.96-8.32 13.568-19.904 25.696-31.552 34.496-33.12 76.672-45.216 121.152-20.16l-2.464-1.312 2.336-3.328c14.4-20.224 31.04-36.48 50.688-45.92z m318.912 183.04c-49.728 25.664-140.224 39.104-245.952 39.104h-10.24c-99.072-0.864-183.712-13.696-232.416-37.44a821.888 821.888 0 0 1-48.48 196l-1.664 5.408a161.76 161.76 0 0 1-2.24 5.696l-2.656 6.528c-1.568 3.84-2.528 6.4-3.296 8.736a25.408 25.408 0 0 0-1.504 6.816c0 29.44 145.504 77.536 305.856 77.536 155.968 0 299.712-48.192 305.6-78.496l0.192-2.016-0.064-0.384a28.256 28.256 0 0 0-1.376-4.512l-1.088-2.688-1.184-2.432c-12.576-26.88-23.68-59.104-33.6-95.648a1218.656 1218.656 0 0 1-25.024-116.608z m-416.096 85.12a24 24 0 0 1 24.16 20.288l0.32 3.648c0.256 28.576-6.496 71.712-26.88 121.92a24 24 0 1 1-44.48-18.08c10.336-25.44 16.96-50.08 20.544-73.056 0.832-5.44 1.472-10.496 1.92-15.168l0.736-9.504 0.128-5.632a24 24 0 0 1 23.552-24.384z m166.624-197.824c-20.64-26.048-36.544-31.616-52.064-25.6-13.44 5.216-27.392 19.2-39.36 37.344-12.832 19.488-38.784 24.48-58.816 13.152l-4.544-2.336c-21.12-9.696-40.384-3.296-59.744 15.264l-3.072 3.072-1.696 1.856-1.152 1.344 2.464 1.312c39.488 19.232 80.736 4.48 112.384-30.08l5.12-5.952 2.688-2.88c11.072-11.136 20.992-17.92 29.888-20.288 8.128-2.176 15.552-0.32 24.96 8.96l2.912 3.008 3.072 3.392c25.344 28.8 48.96 43.264 87.936 28.608l4.352-1.792 4.416-1.92c39.264-17.664 72.448-12.352 103.136 32.64l2.56 3.776c27.328 40.96 38.144 102.656 34.944 177.984l-0.448 9.6-0.384 6.464-0.256 5.632a24 24 0 0 1-47.936-2.048l0.064-1.664 0.384-7.552 0.32-7.552c2.24-56.128-5.44-101.44-22.912-131.2l-1.536-2.368c-14.08-20.544-27.136-25.536-45.824-18.752l-2.688 1.024-4.352 1.792c-54.912 21.504-97.28 3.328-134.08-36.8z"/>
+                <path d="M431.424 246.336c36.576-14.208 74.112-1.024 107.04 40.48l-0.32-0.384-2.016-2.464 7.264-3.84c42.432-21.44 83.84-22.304 112 16.128l0.864 1.248 3.552-1.92c34.24-17.376 75.168-2.144 116.832 50.304l5.024 6.496 3.2 4.416c4.16 6.848 6.4 14.4 6.4 22.272l-0.128-2.752 1.76 13.76 2.56 17.664c0.96 6.176 1.984 12.608 3.104 19.328 6.4 38.24 14.368 76.448 24 111.968 9.216 34.08 19.52 63.808 30.24 86.816l2.72 5.76 1.504 3.744c1.6 4.224 2.848 8.448 3.616 12.736 0.608 3.104 0.928 6.176 0.928 9.248 0 69.312-162.336 126.272-343.552 128.352l-10.272 0.064c-186.88 0-353.888-55.232-353.888-125.536 0-7.136 1.408-14.112 3.904-21.76 1.216-3.68 2.56-7.136 4.48-11.936l3.648-9.056c0.736-1.92 1.12-3.2 1.792-5.44a786.496 786.496 0 0 0 43.648-166.016c2.72-18.432 4.448-35.104 5.408-49.664l0.672-13.44 0.096-3.84 0.32-5.184a43.52 43.52 0 0 1 7.264-18.912l2.272-3.488c4.96-8.32 13.568-19.904 25.696-31.552 34.496-33.12 76.672-45.216 121.152-20.16l-2.464-1.312 2.336-3.328c14.4-20.224 31.04-36.48 50.688-45.92z m318.912 183.04c-49.728 25.664-140.224 39.104-245.952 39.104h-10.24c-99.072-0.864-183.712-13.696-232.416-37.44a821.888 821.888 0 0 1-48.48 196l-1.664 5.408a161.76 161.76 0 0 1-2.24 5.696l-2.656 6.528c-1.568 3.84-2.528 6.4-3.296 8.736a25.408 25.408 0 0 0-1.504 6.816c0 29.44 145.504 77.536 305.856 77.536 155.968 0 299.712-48.192 305.6-78.496l0.192-2.016-0.064-0.384a28.256 28.256 0 0 0-1.376-4.512l-1.088-2.688-1.184-2.432c-12.576-26.88-23.68-59.104-33.6-95.648a1218.656 1218.656 0 0 1-25.024-116.608z m-416.096 85.12a24 24 0 0 1 24.16 20.288l0.32 3.648c0.256 28.576-6.496 71.712-26.88 121.92a24 24 0 1 1-44.48-18.08c10.336-25.44 16.96-50.08 20.544-73.056 0.832-5.44 1.472-10.496 1.92-15.168l0.736-9.504 0.128-5.632a24 24 0 0 1 23.552-24.384z m166.624-197.824c-20.64-26.048-36.544-31.616-52.064-25.6-13.44 5.216-27.392 19.2-39.36 37.344-12.832 19.488-38.784 24.48-58.816 13.152l-4.544-2.336c-21.12-9.696-40.384-3.296-59.744 15.264l-3.072 3.072-1.696 1.856-1.152 1.344 2.464 1.312c39.488 19.744 76.992 28.608 109.056 26.048l3.264-0.32c32.96-4.16 56.896-23.328 63.008-53.024l0.544-3.072a56.32 56.32 0 0 0-12.8-9.824l-3.712-1.984c-2.88-1.6-5.952-3.328-9.152-5.248l2.112-2.048c20.864-20.032 43.584-25.536 62.4-14.272 6.368 3.68 12.032 8.768 17.376 15.68z m79.552-64.64c-6.336-3.68-10.56-9.408-12.992-17.28l-0.64-2.304 3.456 1.664c6.464 3.136 10.24 8.256 11.456 14.72l0.384 2.88-1.664 0.32z"/>
               </svg>
             </button>
           </div>
         </div>
 
+        ${this._renderWeekdayTabs()}
         ${this._config.show_timeline ? this._renderTimeline(timeline) : ''}
         ${this._config.show_timeline ? this._renderAddPlanButton() : ''}
         ${this._config.show_summary ? this._renderSummary(summary) : ''}
@@ -127,16 +142,51 @@ return html`
     `;
   }
 
-  /** 获取日期显示字符串 */
+  private _emptySummary(): TodaySummary {
+    return {
+      planAmount: 0,
+      actualAmount: 0,
+      manualAmount: 0,
+      isOnline: false,
+      totalCount: 0,
+      completedCount: 0,
+      pendingCount: 0,
+    };
+  }
+
+  private _renderWeekdayTabs() {
+    const today = getTodayWeekdayNumber();
+    
+    return html`
+      <div class="weekday-tabs">
+        ${[1, 2, 3, 4, 5, 6, 7].map(day => html`
+          <button 
+            class="weekday-tab ${this._selectedDay === day ? 'active' : ''} ${day === today ? 'today' : ''}"
+            @click=${() => this._handleDaySwitch(day)}
+          >
+            ${WEEKDAY_NAMES[day]}
+          </button>
+        `)}
+      </div>
+    `;
+  }
+
+  private _handleDaySwitch(day: number): void {
+    if (this._selectedDay !== day) {
+      this._selectedDay = day;
+      this._cancelEdit();
+      this.requestUpdate();
+    }
+  }
+
   private _getDateDisplay(): string {
     const now = new Date();
     const month = now.getMonth() + 1;
     const day = now.getDate();
-    const weekday = getTodayWeekday();
+    const weekday = WEEKDAY_NAMES[this._selectedDay];
     return `${month}月${day}日 ${weekday}`;
   }
 
-  /** 渲染时间线 */
   private _renderTimeline(timeline: TimelineItem[]) {
     if (!timeline.length) {
       return html`
@@ -152,28 +202,13 @@ return html`
     return html`
       <div class="section">
         <div class="timeline-list">
-          ${timeline.filter(item => {
-            const pendingChange = this._pendingPlanChanges.get(item.itemId);
-            const isPlanDeleted = pendingChange?.deleted || item.itemType === 'deleted_plan';
-            return !(isPlanDeleted && !item.isExecuted);
-          }).map(item => this._renderTimelineItem(item))}
+          ${timeline.filter(item => item.itemType !== 'deleted_plan' || item.isExecuted).map(item => this._renderTimelineItem(item))}
         </div>
       </div>
     `;
   }
 
-  /** 渲染时间线条目（紧凑版本） */
   private _renderTimelineItem(item: TimelineItem) {
-    const pendingChange = this._pendingPlanChanges.get(item.itemId);
-    const isPlanDeleted = pendingChange?.deleted || item.itemType === 'deleted_plan';
-    
-    const displayTime = pendingChange?.time || item.time;
-    const displayName = pendingChange?.name || item.name;
-    const displayAmount = pendingChange?.amount ?? item.plannedAmount;
-    
-    const amount = item.actualAmount !== undefined ? item.actualAmount : displayAmount;
-    const isManualFeed = item.itemType === 'manual';
-    const canEdit = item.itemType === 'plan' && !isPlanDeleted;
     const editField = this._editingItem?.itemId === item.itemId ? this._editingItem?.field : null;
     
     const statusIconHtml = item.isExecuted
@@ -199,11 +234,10 @@ return html`
       </svg>
     `;
 
-    const canToggle = item.itemType === 'plan' && !item.isExecuted && !isPlanDeleted;
-    const canDeleteBtn = item.itemType === 'plan' && item.canDelete && !isPlanDeleted;
+    const canToggle = item.itemType === 'plan' && !item.isExecuted;
+    const canDeleteBtn = item.itemType === 'plan' && item.canDelete && !item.isExecuted;
+    const canEdit = item.itemType === 'plan' && !item.isExecuted;
 
-    const editData = this._editingItem;
-    
     const focusInput = (el: Element | undefined) => {
       if (el && (el instanceof HTMLInputElement)) {
         requestAnimationFrame(() => {
@@ -216,40 +250,41 @@ return html`
       }
     };
 
-    const timeEl = editField === 'time' && editData
+    const timeEl = editField === 'time' && this._editingItem
       ? html`
           <input 
             ${ref(focusInput)}
             type="time" 
             class="edit-time" 
-            .value=${editData.time}
+            .value=${this._editingItem.time}
             @change=${(e: Event) => { this._editingItem!.time = (e.target as HTMLInputElement).value; }}
             @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this._cancelEdit(); }}
           />
         `
-      : html`<span class="time ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'time') : undefined}>${displayTime}</span>`;
+      : html`<span class="time ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'time') : undefined}>${item.time}</span>`;
 
-    const nameEl = editField === 'name' && editData
+    const nameEl = editField === 'name' && this._editingItem
       ? html`
           <input 
             ${ref(focusInput)}
             type="text" 
             class="edit-name" 
-            .value=${editData.name}
+            .value=${this._editingItem.name}
             @change=${(e: Event) => { this._editingItem!.name = (e.target as HTMLInputElement).value; }}
             @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this._cancelEdit(); }}
             placeholder="名称"
           />
         `
-      : html`<span class="name ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'name') : undefined}>${displayName}</span>`;
+      : html`<span class="name ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'name') : undefined}>${item.name}</span>`;
 
-    const amountEl = editField === 'amount' && editData
+    const amount = item.actualAmount !== undefined ? item.actualAmount : item.plannedAmount;
+    const amountEl = editField === 'amount' && this._editingItem
       ? html`
           <input 
             ${ref(focusInput)}
             type="number" 
             class="edit-amount" 
-            .value=${String(editData.amount)}
+            .value=${String(this._editingItem.amount)}
             min="1" max="100"
             @change=${(e: Event) => { this._editingItem!.amount = parseInt((e.target as HTMLInputElement).value) || 10; }}
             @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this._cancelEdit(); }}
@@ -258,7 +293,7 @@ return html`
       : html`<span class="amount ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'amount') : undefined}>${amount}g</span>`;
 
     return html`
-      <div class="timeline-item ${item.itemType} ${editField ? 'editing' : ''} ${isPlanDeleted ? 'plan-deleted' : ''}">
+      <div class="timeline-item ${item.itemType} ${editField ? 'editing' : ''} ${!item.isEnabled ? 'disabled' : ''}">
         <div class="item-row">
           ${timeEl}
           ${nameEl}
@@ -269,15 +304,15 @@ return html`
               ? html`
                   <div 
                     class="toggle-switch ${item.isEnabled ? 'on' : 'off'} ${!canToggle ? 'disabled' : ''}"
-                    @click=${canToggle ? () => this._togglePlan(item) : undefined}
-                    title="${isManualFeed ? '手动喂食' : (isPlanDeleted ? '已删除计划' : (item.isExecuted ? '已执行' : (item.isEnabled ? '点击禁用计划' : '点击启用计划')))}"
+                    @click=${canToggle ? () => this._handleToggle(item) : undefined}
+                    title="${item.isExecuted ? '已执行' : (item.isEnabled ? '点击禁用' : '点击启用')}"
                   >
                     <div class="toggle-thumb"></div>
                   </div>
                   <button 
                     class="icon-delete-btn ${!canDeleteBtn ? 'disabled' : ''}" 
-                    @click=${canDeleteBtn ? () => this._deletePlan(item) : undefined}
-                    title="${isManualFeed ? '手动喂食' : (isPlanDeleted ? '已删除计划' : '删除计划')}"
+                    @click=${canDeleteBtn ? () => this._handleDelete(item) : undefined}
+                    title="删除计划"
                     ?disabled=${!canDeleteBtn}
                   >
                     ${deleteIconSvg}
@@ -290,7 +325,6 @@ return html`
     `;
   }
 
-  /** 渲染新增计划按钮 */
   private _renderAddPlanButton() {
     return html`
       <div class="timeline-list-footer">
@@ -301,7 +335,6 @@ return html`
     `;
   }
 
-  /** 渲染统计区域 */
   private _renderSummary(summary: TodaySummary) {
     return html`
       <div class="summary-row">
@@ -325,34 +358,26 @@ return html`
     `;
   }
 
-  /** 操作：手动喂食 */
   private async _handleManualFeed(): Promise<void> {
-    if (!this.hass || !this._config) {
-      return;
-    }
-    
+    if (!this.hass || !this._config) return;
+
     const feedEntity = this._getManualFeedEntity();
-    
     if (feedEntity) {
       try {
-        await this.hass.callService('button', 'press', {
-          entity_id: feedEntity
-        });
+        await this.hass.callService('button', 'press', { entity_id: feedEntity });
       } catch (error) {
-        console.error('[PetkitSoloCard] 手动喂食失败:', error);
+        console.error('[PetkitFeeder] 手动喂食失败:', error);
       }
     }
   }
-  
-  /** 获取手动喂食按钮实体ID */
+
   private _getManualFeedEntity(): string | null {
     if (this.hass) {
       for (const entityId in this.hass.states) {
         if (entityId.startsWith('button.') && entityId.includes('petkit')) {
           const state = this.hass.states[entityId];
           const friendlyName = state?.attributes?.friendly_name || '';
-          if (friendlyName.includes('手动') || friendlyName.includes('出粮') || 
-              friendlyName.toLowerCase().includes('feed')) {
+          if (friendlyName.includes('手动') || friendlyName.includes('出粮') || friendlyName.toLowerCase().includes('feed')) {
             if (!friendlyName.includes('刷新') && !friendlyName.toLowerCase().includes('refresh')) {
               return entityId;
             }
@@ -360,35 +385,25 @@ return html`
         }
       }
     }
-    
     return null;
   }
 
-  /** 操作：刷新 */
   private async _handleRefresh(): Promise<void> {
-    if (!this.hass || !this._config) {
-      return;
-    }
-    
+    if (!this.hass || !this._config) return;
+
     const refreshEntity = this._getRefreshEntity();
-    
     if (refreshEntity) {
       try {
-        await this.hass.callService('button', 'press', {
-          entity_id: refreshEntity
-        });
+        await this.hass.callService('button', 'press', { entity_id: refreshEntity });
       } catch (error) {
-        console.error('[PetkitSoloCard] 刷新失败:', error);
+        console.error('[PetkitFeeder] 刷新失败:', error);
       }
     }
   }
-  
-  /** 获取刷新按钮实体ID */
+
   private _getRefreshEntity(): string | null {
-    if (this._config?.refresh_entity) {
-      return this._config.refresh_entity;
-    }
-    
+    if (this._config?.refresh_entity) return this._config.refresh_entity;
+
     if (this.hass) {
       for (const entityId in this.hass.states) {
         if (entityId.startsWith('button.') && entityId.includes('petkit')) {
@@ -400,411 +415,201 @@ return html`
         }
       }
     }
-    
     return null;
   }
 
-  /** 操作：切换计划启用状态 */
-  private async _togglePlan(item: TimelineItem): Promise<void> {
-    if (!this.hass || !this._config) {
-      return;
-    }
-    
-    if (item.isExecuted) {
-      return;
-    }
-    
-    const newEnabled = !item.isEnabled;
-    
-    if (item.isEnabled === newEnabled) {
-      return;
-    }
-    
-    const day = new Date().getDay();
-    const weekday = day === 0 ? 7 : day;
-    
-    this._pendingPlanChanges.set(item.itemId, {
-      time: item.time,
-      name: item.name,
-      amount: item.plannedAmount,
-      enabled: newEnabled,
-    });
-    this.requestUpdate();
-    
-    try {
-      await this.hass.callService('petkit_feeder', 'toggle_feeding_item', {
-        day: weekday,
-        item_id: item.itemId,
-        enabled: newEnabled
-      });
-      this._pendingPlanChanges.delete(item.itemId);
-    } catch (error) {
-      this._pendingPlanChanges.delete(item.itemId);
-      this.requestUpdate();
-      console.error('[PetkitSoloCard] 切换失败:', error);
-      alert(`切换失败: ${error}`);
-    }
-  }
+  private async _handleToggle(item: TimelineItem): Promise<void> {
+    if (!this.hass || !this._config) return;
+    if (item.isExecuted) return;
 
-  /** 操作：删除计划 */
-  private async _deletePlan(item: TimelineItem): Promise<void> {
-    if (!this.hass || !this._config) {
-      return;
-    }
-    
-    const pendingChange = this._pendingPlanChanges.get(item.itemId);
-    
-    if (pendingChange?.isNew) {
-      this._pendingPlanChanges.delete(item.itemId);
-      if (this._editingItem?.itemId === item.itemId) {
-        this._editingItem = null;
-        this._originalItemData = null;
+    await toggleFeedingItem(
+      this.hass,
+      this._selectedDay,
+      item,
+      this._weeklyCache,
+      () => this.requestUpdate(),
+      (error) => {
+        console.error('[PetkitFeeder] 切换失败:', error);
+        this.requestUpdate();
       }
-      if (this._saveTimeout) {
-        clearTimeout(this._saveTimeout);
-        this._saveTimeout = null;
-      }
-      this.requestUpdate();
-      return;
-    }
-    
-    if (pendingChange?.deleted) {
-      return;
-    }
-    
-    const day = new Date().getDay();
-    const weekday = day === 0 ? 7 : day;
-    
-    console.log('[PetkitSoloCard] 删除计划:', {
-      day: weekday,
-      item_id: item.itemId,
-      item_name: item.name,
-      item_time: item.time
-    });
-    
-    this._pendingPlanChanges.set(item.itemId, {
-      time: item.time,
-      name: item.name,
-      amount: item.plannedAmount,
-      deleted: true,
-    });
-    this.requestUpdate();
-    
-    try {
-      await this.hass.callService('petkit_feeder', 'remove_feeding_item', {
-        day: weekday,
-        item_id: item.itemId
-      });
-      console.log('[PetkitSoloCard] 删除计划成功');
-    } catch (error) {
-      console.error('[PetkitSoloCard] 删除计划失败:', error);
-      this._pendingPlanChanges.delete(item.itemId);
-      this.requestUpdate();
-    }
+    );
   }
 
-  /** 操作：开始编辑 */
-  private _startEdit(item: TimelineItem, field: 'time' | 'name' | 'amount'): void {
-    if (this._saveTimeout) {
-      clearTimeout(this._saveTimeout);
-      this._saveTimeout = null;
+  private _handleDelete(item: TimelineItem): void {
+    if (!this.hass || !this._config) return;
+
+    // 从缓存中移除该项
+    const dayCache = this._weeklyCache.getDayCache(this._selectedDay);
+    if (dayCache) {
+      dayCache.timeline = dayCache.timeline.filter(t => t.itemId !== item.itemId);
     }
-    
-    const pendingChange = this._pendingPlanChanges.get(item.itemId);
-    const editTime = pendingChange?.time || item.time;
-    const editName = pendingChange?.name || item.name;
-    const editAmount = pendingChange?.amount ?? item.plannedAmount;
-    
-    this._editingItem = {
-      itemId: item.itemId,
-      field: field,
-      time: editTime,
-      name: editName,
-      amount: editAmount,
-    };
-    this._originalItemData = {
-      time: editTime,
-      name: editName,
-      amount: editAmount,
-    };
     this.requestUpdate();
+
+    // 防抖保存
+    if (this._deleteDebounceTimer) {
+      clearTimeout(this._deleteDebounceTimer);
+    }
+
+    this._deleteDebounceTimer = window.setTimeout(() => {
+      this._deleteDebounceTimer = null;
+      this._triggerSave();
+    }, 2000);
   }
 
-/** 操作：新增计划 */
   private _handleAddPlan(): void {
-    if (!this.hass || !this._config) {
-      return;
-    }
-    
-    if (this._saveTimeout) {
-      clearTimeout(this._saveTimeout);
-      this._saveTimeout = null;
-    }
-    
+    if (!this.hass || !this._config) return;
+
     const newItemId = `new_${Date.now()}`;
-    
-    this._pendingPlanChanges.set(newItemId, {
-      time: '00:00',
+    const newItem: TimelineItem = {
+      id: newItemId,
+      itemId: newItemId,
+      time: '08:00',
       name: '早餐',
-      amount: 10,
-      isNew: true,
-    });
-    
+      timeSeconds: 8 * 3600,
+      itemType: 'plan',
+      plannedAmount: 10,
+      isExecuted: false,
+      isEnabled: true,
+      canDisable: true,
+      canDelete: true,
+    };
+
+    // 添加到缓存
+    const dayCache = this._weeklyCache.getDayCache(this._selectedDay);
+    if (dayCache) {
+      dayCache.timeline.push(newItem);
+      dayCache.timeline.sort((a, b) => a.time.localeCompare(b.time));
+    }
+
     this._editingItem = {
       itemId: newItemId,
       field: 'name',
-      time: '00:00',
+      time: '08:00',
       name: '早餐',
       amount: 10,
     };
-    
+
     this._originalItemData = {
-      time: '00:00',
+      time: '08:00',
       name: '早餐',
       amount: 10,
     };
-    
-    console.log('[PetkitSoloCard] 新增计划:', newItemId);
+
     this.requestUpdate();
   }
 
-  /** 卡片失焦处理 */
+  private _startEdit(item: TimelineItem, field: 'time' | 'name' | 'amount'): void {
+    this._editingItem = {
+      itemId: item.itemId,
+      field: field,
+      time: item.time,
+      name: item.name,
+      amount: item.plannedAmount,
+    };
+
+    this._originalItemData = {
+      time: item.time,
+      name: item.name,
+      amount: item.plannedAmount,
+    };
+
+    this.requestUpdate();
+  }
+
+  private _cancelEdit(): void {
+    this._editingItem = null;
+    this._originalItemData = null;
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+      this._saveDebounceTimer = null;
+    }
+    this.requestUpdate();
+  }
+
   private _handleCardFocusOut(e: FocusEvent): void {
     const relatedTarget = e.relatedTarget as Element;
-    if (relatedTarget && this.contains(relatedTarget)) {
-      return;
-    }
-    
+    if (relatedTarget && this.contains(relatedTarget)) return;
+
     if (relatedTarget && (
       relatedTarget.classList.contains('edit-time') ||
       relatedTarget.classList.contains('edit-name') ||
       relatedTarget.classList.contains('edit-amount')
-    )) {
-      return;
-    }
-    
-    if (this._saveTimeout) {
-      clearTimeout(this._saveTimeout);
-    }
-    
-    this._saveTimeout = window.setTimeout(() => {
-      this._doSavePendingChanges();
-    }, 100);
-  }
+    )) return;
 
-  /** 执行待保存的修改 */
-  private _doSavePendingChanges(): void {
-    const activeEl = document.activeElement;
-    if (activeEl && (
-      activeEl.classList.contains('edit-time') ||
-      activeEl.classList.contains('edit-name') ||
-      activeEl.classList.contains('edit-amount')
-    )) {
-      return;
-    }
-    
-    if (!this._editingItem) {
-      return;
-    }
-    
-    const editData = { ...this._editingItem };
-    const originalData = this._originalItemData;
-    const pendingChange = this._pendingPlanChanges.get(editData.itemId);
-    const isNew = pendingChange?.isNew;
-    
-    this._editingItem = null;
-    this._originalItemData = null;
-    
-    const hasChanges = originalData && (
-      editData.time !== originalData.time ||
-      editData.name !== originalData.name ||
-      editData.amount !== originalData.amount
-    );
-    
-    // 更新待提交变更
-    this._pendingPlanChanges.set(editData.itemId, {
-      time: editData.time,
-      name: editData.name,
-      amount: editData.amount,
-      isNew: isNew,
-    });
-    
-    if (hasChanges) {
-      this.requestUpdate();
-      // 调用批量保存
-      this._saveAllPendingChanges();
-    }
-    
-    this.requestUpdate();
-  }
-  
-  /** 批量保存所有待提交变更 */
-  private async _saveAllPendingChanges(): Promise<void> {
-    if (!this.hass || !this._config) {
-      return;
-    }
-    
-    // 1. 获取当前时间线（包含所有计划）
-    const planEntityId = this._config.entity || this._getEntityId('feeding_schedule');
-    const planEntity = this.hass.states[planEntityId];
-    
-    if (!planEntity) {
-      return;
-    }
-    
-    // 2. 构建完整计划列表
-    const weekday = new Date().getDay() || 7;
-    const weekdayNames = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-    const schedule = planEntity.attributes?.schedule || {};
-    const todayData = schedule[weekdayNames[weekday]] || {};
-    const existingPlans = todayData.items || [];
-    const daySuspended = todayData.suspended ?? 0;
-    
-    // 3. 合并待提交变更
-    const allItems: Array<{ time: string; amount: number; name: string; enabled: boolean }> = [];
-    
-    // 添加现有计划（排除已删除的）
-    for (const plan of existingPlans) {
-      const pendingChange = this._pendingPlanChanges.get(`s${this._parseTimeToSeconds(plan.time)}`);
-      
-      // 已删除的计划跳过
-      if (pendingChange?.deleted) {
-        continue;
-      }
-      
-      // 使用变更后的数据（如果有）
-      const item = {
-        time: pendingChange?.time || plan.time,
-        amount: pendingChange?.amount ?? plan.amount,
-        name: pendingChange?.name || plan.name,
-        enabled: pendingChange?.enabled !== undefined ? pendingChange.enabled : (daySuspended !== 1),
-      };
-      
-      allItems.push(item);
-    }
-    
-    // 4. 添加新计划（pendingChanges 中 isNew=true 的）
-    this._pendingPlanChanges.forEach((change) => {
-      if (change.isNew && !change.deleted) {
-        allItems.push({
-          time: change.time,
-          amount: change.amount,
-          name: change.name,
-          enabled: true,
-        });
-      }
-    });
-    
-    // 5. ✨ 调整重复时间（自动顺延）
-    const adjustedItems = this._adjustDuplicateTimes(allItems);
-    
-    // 6. 去重（按时间）- 使用调整后的列表
-    const uniqueItems: typeof adjustedItems = [];
-    const timeSet = new Set<string>();
-    for (const item of adjustedItems) {
-      if (!timeSet.has(item.time)) {
-        timeSet.add(item.time);
-        uniqueItems.push(item);
-      }
-    }
-    
-    // 7. 排序
-    uniqueItems.sort((a, b) => a.time.localeCompare(b.time));
-    
-    // 8. 调用批量保存服务（整周同步）
-    try {
-      await saveFeed(this.hass, uniqueItems, "1,2,3,4,5,6,7", this._pendingPlanChanges);
-    } catch (error) {
-      console.error('[PetkitFeeder] 批量保存失败:', error);
-    }
-  }
-  
-private _parseTimeToSeconds(timeStr: string): number {
-    const parts = timeStr.split(':');
-    return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60;
-  }
-
-  /**
-   * 调整重复的时间（自动顺延）
-   * @param items 计划列表
-   * @returns 调整后的计划列表
-   */
-  private _adjustDuplicateTimes(
-    items: Array<{ time: string; amount: number; name: string; enabled: boolean }>
-  ): Array<{ time: string; amount: number; name: string; enabled: boolean }> {
-    const adjustedItems: typeof items = [];
-    const timeSet = new Set<string>();
-    
-    for (const item of items) {
-      let adjustedTime = item.time;
-      let attempts = 0;
-      const maxAttempts = 1439; // 一天最多1440分钟，防止死循环
-      
-      // 如果时间已存在，向后顺延
-      while (timeSet.has(adjustedTime) && attempts < maxAttempts) {
-        adjustedTime = this._incrementTimeByOneMinute(adjustedTime);
-        attempts++;
-      }
-      
-      // 记录时间
-      timeSet.add(adjustedTime);
-      
-      // 添加调整后的计划
-      adjustedItems.push({
-        ...item,
-        time: adjustedTime,
-      });
-      
-      // 如果时间被调整了，记录日志
-      if (adjustedTime !== item.time) {
-        console.log(
-          `[PetkitFeeder] 计划"${item.name}"时间 ${item.time} 已存在，自动调整为 ${adjustedTime}`
-        );
-      }
-    }
-    
-    return adjustedItems;
-  }
-
-  /**
-   * 时间加1分钟
-   * @param time HH:MM 格式
-   * @returns HH:MM 格式
-   */
-  private _incrementTimeByOneMinute(time: string): string {
-    const [hours, minutes] = time.split(':').map(Number);
-    let newMinutes = minutes + 1;
-    let newHours = hours;
-    
-    if (newMinutes >= 60) {
-      newMinutes = 0;
-      newHours = (newHours + 1) % 24; // 跨天处理（23:59 → 00:00）
-    }
-    
-    return `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
-  }
-
-  /** 操作：取消编辑 */
-  private _cancelEdit(): void {
+    // 完成编辑
     if (this._editingItem) {
-      const pendingChange = this._pendingPlanChanges.get(this._editingItem.itemId);
-      if (pendingChange?.isNew) {
-        this._pendingPlanChanges.delete(this._editingItem.itemId);
+      this._finishEdit();
+    }
+
+    // 防抖保存
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+    }
+
+    this._saveDebounceTimer = window.setTimeout(() => {
+      this._saveDebounceTimer = null;
+      this._triggerSave();
+    }, 500);
+  }
+
+  private _finishEdit(): void {
+    if (!this._editingItem || !this._originalItemData) return;
+
+    const { itemId, time, name, amount } = this._editingItem;
+    const hasChanges = time !== this._originalItemData.time ||
+                       name !== this._originalItemData.name ||
+                       amount !== this._originalItemData.amount;
+
+    if (hasChanges) {
+      // 更新缓存
+      const dayCache = this._weeklyCache.getDayCache(this._selectedDay);
+      if (dayCache) {
+        const item = dayCache.timeline.find(t => t.itemId === itemId);
+        if (item) {
+          item.time = time;
+          item.name = name;
+          item.plannedAmount = amount;
+          
+          const [h, m] = time.split(':').map(Number);
+          item.timeSeconds = h * 3600 + m * 60;
+          
+          // 重新排序
+          dayCache.timeline.sort((a, b) => a.time.localeCompare(b.time));
+        }
       }
     }
+
     this._editingItem = null;
     this._originalItemData = null;
-    if (this._saveTimeout) {
-      clearTimeout(this._saveTimeout);
-      this._saveTimeout = null;
-    }
     this.requestUpdate();
+  }
+
+  private async _triggerSave(): Promise<void> {
+    if (!this.hass || !this._config) return;
+
+    const changedDays = this._weeklyCache.detectChanges();
+    if (changedDays.length === 0) return;
+
+    console.log('[PetkitFeeder] 检测到变更，准备保存:', changedDays);
+
+    await saveFeed(
+      this.hass,
+      changedDays,
+      this._weeklyCache,
+      () => {
+        console.log('[PetkitFeeder] 保存成功');
+        this.requestUpdate();
+      },
+      (error) => {
+        console.error('[PetkitFeeder] 保存失败:', error);
+        this.requestUpdate();
+      }
+    );
   }
 
   static styles = combineStyles();
 }
 
-// 显式注册自定义元素
 if (!customElements.get('petkit-feeder-card')) {
   customElements.define('petkit-feeder-card', PetkitFeederCard);
 }

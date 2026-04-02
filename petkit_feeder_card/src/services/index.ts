@@ -1,4 +1,4 @@
 /** 服务调用模块汇总 */
 
-export * from './plan';
-export * from './device';
+export { saveFeed, toggleFeedingItem } from './plan';
+export { manualFeed, refreshData, findManualFeedEntity, findRefreshEntity } from './device';
