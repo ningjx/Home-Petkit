@@ -65,7 +65,6 @@ export const timelineStyles = css`
   
   .time.editable, .name.editable, .amount.editable {
     cursor: pointer;
-    padding: 2px 4px;
     border-radius: 4px;
     transition: background-color 0.2s;
   }
@@ -119,12 +118,6 @@ export const timelineStyles = css`
   /* 禁用状态的计划项 */
   .timeline-item.disabled {
     opacity: 0.5;
-  }
-  
-  .timeline-item.disabled .time,
-  .timeline-item.disabled .name,
-  .timeline-item.disabled .amount {
-    text-decoration: line-through;
   }
   
   /* 已删除计划的记录项 */

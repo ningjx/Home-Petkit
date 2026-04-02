@@ -12,12 +12,6 @@ from typing import Any
 import aiohttp
 from aiohttp import ContentTypeError
 import m3u8
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from . import utils
 from .bluetooth import BluetoothManager
@@ -1224,19 +1218,6 @@ class PrepReq:
             "X-Timezone": await get_timezone_offset(self.timezone),
         }
 
-    @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=1, max=16),
-        retry=(
-            retry_if_exception_type(PetkitServerBusyError)
-            | retry_if_exception_type(aiohttp.ClientConnectorError)
-            | retry_if_exception_type(aiohttp.ClientOSError)
-            | retry_if_exception_type(aiohttp.ServerDisconnectedError)
-            | retry_if_exception_type(aiohttp.ClientResponseError)
-            | retry_if_exception_type(asyncio.TimeoutError)
-        ),
-        reraise=True,
-    )
     async def request(
         self,
         method: str,

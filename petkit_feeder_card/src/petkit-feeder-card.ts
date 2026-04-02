@@ -21,8 +21,8 @@ export class PetkitFeederCard extends LitElement {
   private _selectedDay: number = 1;
   private _editingItem: { itemId: string; field: 'time' | 'name' | 'amount'; time: string; name: string; amount: number } | null = null;
   private _originalItemData: { time: string; name: string; amount: number } | null = null;
-  private _deleteDebounceTimer: number | null = null;
   private _saveDebounceTimer: number | null = null;
+  private _isSaving: boolean = false;
 
   private _getEntityId(entityType: string): string {
     if (!this._config) return '';
@@ -202,7 +202,7 @@ export class PetkitFeederCard extends LitElement {
     return html`
       <div class="section">
         <div class="timeline-list">
-          ${timeline.filter(item => item.itemType !== 'deleted_plan' || item.isExecuted).map(item => this._renderTimelineItem(item))}
+          ${timeline.map(item => this._renderTimelineItem(item))}
         </div>
       </div>
     `;
@@ -234,9 +234,11 @@ export class PetkitFeederCard extends LitElement {
       </svg>
     `;
 
-    const canToggle = item.itemType === 'plan' && !item.isExecuted;
+    const today = getTodayWeekdayNumber();
+    const isToday = this._selectedDay === today;
+    const canToggle = item.itemType === 'plan' && !item.isExecuted && isToday;
     const canDeleteBtn = item.itemType === 'plan' && item.canDelete && !item.isExecuted;
-    const canEdit = item.itemType === 'plan' && !item.isExecuted;
+    const canEdit = item.itemType === 'plan';
 
     const focusInput = (el: Element | undefined) => {
       if (el && (el instanceof HTMLInputElement)) {
@@ -257,7 +259,7 @@ export class PetkitFeederCard extends LitElement {
             type="time" 
             class="edit-time" 
             .value=${this._editingItem.time}
-            @change=${(e: Event) => { this._editingItem!.time = (e.target as HTMLInputElement).value; }}
+            @change=${(e: Event) => { if (this._editingItem) this._editingItem.time = (e.target as HTMLInputElement).value; }}
             @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this._cancelEdit(); }}
           />
         `
@@ -270,7 +272,7 @@ export class PetkitFeederCard extends LitElement {
             type="text" 
             class="edit-name" 
             .value=${this._editingItem.name}
-            @change=${(e: Event) => { this._editingItem!.name = (e.target as HTMLInputElement).value; }}
+            @change=${(e: Event) => { if (this._editingItem) this._editingItem.name = (e.target as HTMLInputElement).value; }}
             @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this._cancelEdit(); }}
             placeholder="名称"
           />
@@ -286,14 +288,14 @@ export class PetkitFeederCard extends LitElement {
             class="edit-amount" 
             .value=${String(this._editingItem.amount)}
             min="1" max="100"
-            @change=${(e: Event) => { this._editingItem!.amount = parseInt((e.target as HTMLInputElement).value) || 10; }}
+            @change=${(e: Event) => { if (this._editingItem) this._editingItem.amount = parseInt((e.target as HTMLInputElement).value) || 10; }}
             @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this._cancelEdit(); }}
           />
         `
       : html`<span class="amount ${canEdit ? 'editable' : ''}" @click=${canEdit ? () => this._startEdit(item, 'amount') : undefined}>${amount}g</span>`;
 
     return html`
-      <div class="timeline-item ${item.itemType} ${editField ? 'editing' : ''} ${!item.isEnabled ? 'disabled' : ''}">
+      <div class="timeline-item ${item.itemType} ${editField ? 'editing' : ''} ${item.itemType === 'deleted_plan' ? 'plan-deleted' : ''}">
         <div class="item-row">
           ${timeEl}
           ${nameEl}
@@ -305,14 +307,14 @@ export class PetkitFeederCard extends LitElement {
                   <div 
                     class="toggle-switch ${item.isEnabled ? 'on' : 'off'} ${!canToggle ? 'disabled' : ''}"
                     @click=${canToggle ? () => this._handleToggle(item) : undefined}
-                    title="${item.isExecuted ? '已执行' : (item.isEnabled ? '点击禁用' : '点击启用')}"
+                    title="${item.itemType === 'deleted_plan' ? '已删除计划' : (item.isExecuted ? '已执行' : (isToday ? (item.isEnabled ? '点击禁用' : '点击启用') : '已过期'))}"
                   >
                     <div class="toggle-thumb"></div>
                   </div>
                   <button 
                     class="icon-delete-btn ${!canDeleteBtn ? 'disabled' : ''}" 
                     @click=${canDeleteBtn ? () => this._handleDelete(item) : undefined}
-                    title="删除计划"
+                    title="${item.itemType === 'deleted_plan' ? '已删除计划' : '删除计划'}"
                     ?disabled=${!canDeleteBtn}
                   >
                     ${deleteIconSvg}
@@ -445,19 +447,32 @@ export class PetkitFeederCard extends LitElement {
     }
     this.requestUpdate();
 
-    // 防抖保存
-    if (this._deleteDebounceTimer) {
-      clearTimeout(this._deleteDebounceTimer);
+    // 如果正在保存中，不启动新的保存（变更已在缓存中，下次保存时会包含）
+    if (this._isSaving) {
+      console.log('[PetkitFeeder] 正在保存中，删除操作将在下次保存时生效');
+      return;
     }
 
-    this._deleteDebounceTimer = window.setTimeout(() => {
-      this._deleteDebounceTimer = null;
+    // 统一使用 _saveDebounceTimer，防抖 2 秒后保存
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+    }
+
+    console.log('[PetkitFeeder] 删除计划，启动防抖保存 (2000ms)');
+    this._saveDebounceTimer = window.setTimeout(() => {
+      this._saveDebounceTimer = null;
       this._triggerSave();
     }, 2000);
   }
 
   private _handleAddPlan(): void {
     if (!this.hass || !this._config) return;
+
+    // 清除之前的防抖保存，确保新增不触发保存
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+      this._saveDebounceTimer = null;
+    }
 
     const newItemId = `new_${Date.now()}`;
     const newItem: TimelineItem = {
@@ -499,6 +514,17 @@ export class PetkitFeederCard extends LitElement {
   }
 
   private _startEdit(item: TimelineItem, field: 'time' | 'name' | 'amount'): void {
+    // 取消之前的防抖保存
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+      this._saveDebounceTimer = null;
+    }
+    
+    // 如果正在编辑另一个字段，先完成它（只更新缓存，不触发保存）
+    if (this._editingItem && this._editingItem.itemId !== item.itemId) {
+      this._finishEditSilent();
+    }
+    
     this._editingItem = {
       itemId: item.itemId,
       field: field,
@@ -516,43 +542,7 @@ export class PetkitFeederCard extends LitElement {
     this.requestUpdate();
   }
 
-  private _cancelEdit(): void {
-    this._editingItem = null;
-    this._originalItemData = null;
-    if (this._saveDebounceTimer) {
-      clearTimeout(this._saveDebounceTimer);
-      this._saveDebounceTimer = null;
-    }
-    this.requestUpdate();
-  }
-
-  private _handleCardFocusOut(e: FocusEvent): void {
-    const relatedTarget = e.relatedTarget as Element;
-    if (relatedTarget && this.contains(relatedTarget)) return;
-
-    if (relatedTarget && (
-      relatedTarget.classList.contains('edit-time') ||
-      relatedTarget.classList.contains('edit-name') ||
-      relatedTarget.classList.contains('edit-amount')
-    )) return;
-
-    // 完成编辑
-    if (this._editingItem) {
-      this._finishEdit();
-    }
-
-    // 防抖保存
-    if (this._saveDebounceTimer) {
-      clearTimeout(this._saveDebounceTimer);
-    }
-
-    this._saveDebounceTimer = window.setTimeout(() => {
-      this._saveDebounceTimer = null;
-      this._triggerSave();
-    }, 500);
-  }
-
-  private _finishEdit(): void {
+  private _finishEditSilent(): void {
     if (!this._editingItem || !this._originalItemData) return;
 
     const { itemId, time, name, amount } = this._editingItem;
@@ -561,7 +551,6 @@ export class PetkitFeederCard extends LitElement {
                        amount !== this._originalItemData.amount;
 
     if (hasChanges) {
-      // 更新缓存
       const dayCache = this._weeklyCache.getDayCache(this._selectedDay);
       if (dayCache) {
         const item = dayCache.timeline.find(t => t.itemId === itemId);
@@ -573,7 +562,6 @@ export class PetkitFeederCard extends LitElement {
           const [h, m] = time.split(':').map(Number);
           item.timeSeconds = h * 3600 + m * 60;
           
-          // 重新排序
           dayCache.timeline.sort((a, b) => a.time.localeCompare(b.time));
         }
       }
@@ -581,30 +569,106 @@ export class PetkitFeederCard extends LitElement {
 
     this._editingItem = null;
     this._originalItemData = null;
+  }
+
+  private _cancelEdit(): void {
+    this._editingItem = null;
+    this._originalItemData = null;
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+      this._saveDebounceTimer = null;
+    }
     this.requestUpdate();
+  }
+
+  private _handleCardFocusOut(e: FocusEvent): void {
+    // 检查是否有编辑输入框获得焦点
+    const activeEl = document.activeElement;
+    const isEditingInput = activeEl && (
+      activeEl.classList.contains('edit-time') ||
+      activeEl.classList.contains('edit-name') ||
+      activeEl.classList.contains('edit-amount')
+    );
+    
+    // 如果仍有编辑输入框获得焦点，不触发保存（正在切换编辑字段）
+    if (isEditingInput) {
+      // 完成当前编辑，写入缓存
+      if (this._editingItem) {
+        this._finishEditSilent();
+        this.requestUpdate();  // 更新 UI，退出编辑状态
+      }
+      return;
+    }
+    
+    // 检查焦点是否仍在卡片内
+    const relatedTarget = e.relatedTarget as Element;
+    const focusStillInCard = relatedTarget && this.contains(relatedTarget);
+    
+    if (focusStillInCard) {
+      // 焦点仍在卡片内（点击了其他按钮等），完成编辑但不触发保存
+      if (this._editingItem) {
+        this._finishEditSilent();
+        this.requestUpdate();  // 更新 UI，退出编辑状态
+      }
+      return;
+    }
+
+    // 焦点离开卡片：完成编辑并触发防抖保存
+    if (this._editingItem) {
+      this._finishEditSilent();
+      this.requestUpdate();  // 更新 UI，退出编辑状态
+    }
+
+    // 如果正在保存中，不启动新的保存
+    if (this._isSaving) {
+      console.log('[PetkitFeeder] 正在保存中，跳过新的保存请求');
+      return;
+    }
+
+    // 防抖保存
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+    }
+
+    console.log('[PetkitFeeder] 焦点离开卡片，启动防抖保存 (1000ms)');
+    this._saveDebounceTimer = window.setTimeout(() => {
+      this._saveDebounceTimer = null;
+      this._triggerSave();
+    }, 1000);
   }
 
   private async _triggerSave(): Promise<void> {
     if (!this.hass || !this._config) return;
+    
+    // 防止重复保存
+    if (this._isSaving) {
+      console.log('[PetkitFeeder] 正在保存中，跳过重复调用');
+      return;
+    }
 
     const changedDays = this._weeklyCache.detectChanges();
     if (changedDays.length === 0) return;
 
+    this._isSaving = true;
     console.log('[PetkitFeeder] 检测到变更，准备保存:', changedDays);
 
-    await saveFeed(
-      this.hass,
-      changedDays,
-      this._weeklyCache,
-      () => {
-        console.log('[PetkitFeeder] 保存成功');
-        this.requestUpdate();
-      },
-      (error) => {
-        console.error('[PetkitFeeder] 保存失败:', error);
-        this.requestUpdate();
-      }
-    );
+    try {
+      await saveFeed(
+        this.hass,
+        changedDays,
+        this._weeklyCache,
+        () => {
+          console.log('[PetkitFeeder] 保存成功');
+          this.requestUpdate();
+        },
+        (error) => {
+          console.error('[PetkitFeeder] 保存失败:', error);
+          this.requestUpdate();
+        }
+      );
+    } finally {
+      this._isSaving = false;
+    }
   }
 
   static styles = combineStyles();

@@ -68,9 +68,13 @@ class FeedingService:
             
             # 调用协调器方法
             method = getattr(coordinator, service_name)
-            await method(**params)
+            result = await method(**params)
             
-            _LOGGER.info("服务调用成功: %s", service_name)
+            # 根据返回值记录日志
+            if result is False:
+                _LOGGER.error("服务调用失败: %s", service_name)
+            else:
+                _LOGGER.info("服务调用成功: %s", service_name)
         
         return handler
     
