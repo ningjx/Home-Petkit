@@ -66,6 +66,15 @@ class FeedingService:
             # 提取参数
             params = {key: call.data[key] for key in param_keys if key in call.data}
             
+            # 特殊处理：解析 days 字符串为列表
+            if "days" in params:
+                days_str = params.pop("days")
+                params["days"] = [
+                    int(d.strip()) 
+                    for d in days_str.split(",") 
+                    if d.strip().isdigit() and 1 <= int(d.strip()) <= 7
+                ]
+            
             # 调用协调器方法
             method = getattr(coordinator, service_name)
             await method(**params)
@@ -82,7 +91,9 @@ class FeedingService:
         """
         for service_name, schema in schemas.items():
             # 确定参数键
-            if service_name == "add_feeding_item":
+            if service_name == "save_feed":
+                param_keys = ["days", "items"]
+            elif service_name == "add_feeding_item":
                 param_keys = ["day", "time", "amount", "name"]
             elif service_name == "remove_feeding_item":
                 param_keys = ["day", "item_id"]

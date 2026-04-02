@@ -8,6 +8,7 @@ import { PetkitSoloCardConfig, TimelineItem, TodaySummary } from './types';
 import { getEntityId, getTodayWeekday } from './utils';
 import { processTodayData, PendingChange } from './data';
 import { combineStyles } from './styles';
+import { saveFeed } from './services/plan';
 
 @customElement('petkit-feeder-card')
 export class PetkitFeederCard extends LitElement {
@@ -620,6 +621,7 @@ return html`
       editData.amount !== originalData.amount
     );
     
+    // 更新待提交变更
     this._pendingPlanChanges.set(editData.itemId, {
       time: editData.time,
       name: editData.name,
@@ -629,49 +631,155 @@ return html`
     
     if (hasChanges) {
       this.requestUpdate();
-      if (isNew) {
-        this._saveNewItem(editData);
-      } else {
-        this._updateExistingItem(editData);
-      }
+      // 调用批量保存
+      this._saveAllPendingChanges();
     }
     
     this.requestUpdate();
   }
   
-  private async _updateExistingItem(
-    editData: { itemId: string; time: string; name: string; amount: number }
-  ): Promise<void> {
-    if (!this.hass) {
+  /** 批量保存所有待提交变更 */
+  private async _saveAllPendingChanges(): Promise<void> {
+    if (!this.hass || !this._config) {
       return;
     }
     
-    const day = new Date().getDay();
-    const weekday = day === 0 ? 7 : day;
+    // 1. 获取当前时间线（包含所有计划）
+    const planEntityId = this._config.entity || this._getEntityId('feeding_schedule');
+    const planEntity = this.hass.states[planEntityId];
     
-    console.log('[PetkitSoloCard] 更新计划:', {
-      day: weekday,
-      item_id: editData.itemId,
-      time: editData.time,
-      amount: editData.amount,
-      name: editData.name,
+    if (!planEntity) {
+      return;
+    }
+    
+    // 2. 构建完整计划列表
+    const weekday = new Date().getDay() || 7;
+    const weekdayNames = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    const schedule = planEntity.attributes?.schedule || {};
+    const existingPlans = schedule[weekdayNames[weekday]] || [];
+    
+    // 3. 合并待提交变更
+    const allItems: Array<{ time: string; amount: number; name: string; enabled: boolean }> = [];
+    
+    // 添加现有计划（排除已删除的）
+    for (const plan of existingPlans) {
+      const pendingChange = this._pendingPlanChanges.get(`s${this._parseTimeToSeconds(plan.time)}`);
+      
+      // 已删除的计划跳过
+      if (pendingChange?.deleted) {
+        continue;
+      }
+      
+      // 使用变更后的数据（如果有）
+      const item = {
+        time: pendingChange?.time || plan.time,
+        amount: pendingChange?.amount ?? plan.amount,
+        name: pendingChange?.name || plan.name,
+        enabled: pendingChange?.enabled !== undefined ? pendingChange.enabled : (plan.suspended !== 1),
+      };
+      
+      allItems.push(item);
+    }
+    
+    // 4. 添加新计划（pendingChanges 中 isNew=true 的）
+    this._pendingPlanChanges.forEach((change) => {
+      if (change.isNew && !change.deleted) {
+        allItems.push({
+          time: change.time,
+          amount: change.amount,
+          name: change.name,
+          enabled: true,
+        });
+      }
     });
     
-    try {
-      await this.hass.callService('petkit_feeder', 'update_feeding_item', {
-        day: weekday,
-        item_id: editData.itemId,
-        time: editData.time,
-        amount: editData.amount,
-        name: editData.name,
-      });
-      console.log('[PetkitSoloCard] 更新计划成功');
-      this._pendingPlanChanges.delete(editData.itemId);
-    } catch (error) {
-      console.error('[PetkitSoloCard] 更新计划失败:', error);
-      this._pendingPlanChanges.delete(editData.itemId);
-      this.requestUpdate();
+    // 5. ✨ 调整重复时间（自动顺延）
+    const adjustedItems = this._adjustDuplicateTimes(allItems);
+    
+    // 6. 去重（按时间）- 使用调整后的列表
+    const uniqueItems: typeof adjustedItems = [];
+    const timeSet = new Set<string>();
+    for (const item of adjustedItems) {
+      if (!timeSet.has(item.time)) {
+        timeSet.add(item.time);
+        uniqueItems.push(item);
+      }
     }
+    
+    // 7. 排序
+    uniqueItems.sort((a, b) => a.time.localeCompare(b.time));
+    
+    // 8. 调用批量保存服务（整周同步）
+    try {
+      await saveFeed(this.hass, uniqueItems, "1,2,3,4,5,6,7", this._pendingPlanChanges);
+    } catch (error) {
+      console.error('[PetkitFeeder] 批量保存失败:', error);
+    }
+  }
+  
+private _parseTimeToSeconds(timeStr: string): number {
+    const parts = timeStr.split(':');
+    return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60;
+  }
+
+  /**
+   * 调整重复的时间（自动顺延）
+   * @param items 计划列表
+   * @returns 调整后的计划列表
+   */
+  private _adjustDuplicateTimes(
+    items: Array<{ time: string; amount: number; name: string; enabled: boolean }>
+  ): Array<{ time: string; amount: number; name: string; enabled: boolean }> {
+    const adjustedItems: typeof items = [];
+    const timeSet = new Set<string>();
+    
+    for (const item of items) {
+      let adjustedTime = item.time;
+      let attempts = 0;
+      const maxAttempts = 1439; // 一天最多1440分钟，防止死循环
+      
+      // 如果时间已存在，向后顺延
+      while (timeSet.has(adjustedTime) && attempts < maxAttempts) {
+        adjustedTime = this._incrementTimeByOneMinute(adjustedTime);
+        attempts++;
+      }
+      
+      // 记录时间
+      timeSet.add(adjustedTime);
+      
+      // 添加调整后的计划
+      adjustedItems.push({
+        ...item,
+        time: adjustedTime,
+      });
+      
+      // 如果时间被调整了，记录日志
+      if (adjustedTime !== item.time) {
+        console.log(
+          `[PetkitFeeder] 计划"${item.name}"时间 ${item.time} 已存在，自动调整为 ${adjustedTime}`
+        );
+      }
+    }
+    
+    return adjustedItems;
+  }
+
+  /**
+   * 时间加1分钟
+   * @param time HH:MM 格式
+   * @returns HH:MM 格式
+   */
+  private _incrementTimeByOneMinute(time: string): string {
+    const [hours, minutes] = time.split(':').map(Number);
+    let newMinutes = minutes + 1;
+    let newHours = hours;
+    
+    if (newMinutes >= 60) {
+      newMinutes = 0;
+      newHours = (newHours + 1) % 24; // 跨天处理（23:59 → 00:00）
+    }
+    
+    return `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
   }
 
   /** 操作：取消编辑 */
@@ -691,54 +799,7 @@ return html`
     this.requestUpdate();
   }
 
-  private async _saveNewItem(editData: { itemId: string; time: string; name: string; amount: number }): Promise<void> {
-    if (!this.hass) {
-      return;
-    }
-    
-    const planEntity = this._config?.entity ? this.hass.states[this._config.entity] : null;
-    if (planEntity) {
-      const schedule = planEntity.attributes?.schedule || {};
-      const weekday = new Date().getDay() || 7;
-      const weekdayNames = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-      const todayPlans = schedule[weekdayNames[weekday]] || [];
-      
-      const existingPlan = todayPlans.find((p: any) => p.time === editData.time);
-      
-      if (existingPlan) {
-        console.log('[PetkitSoloCard] 该时间点已存在计划，跳过保存');
-        this._pendingPlanChanges.delete(editData.itemId);
-        this.requestUpdate();
-        return;
-      }
-    }
-    
-    const day = new Date().getDay();
-    const weekday = day === 0 ? 7 : day;
-    
-    console.log('[PetkitSoloCard] 保存新计划:', {
-      day: weekday,
-      time: editData.time,
-      amount: editData.amount,
-      name: editData.name,
-    });
-    
-    try {
-      await this.hass.callService('petkit_feeder', 'add_feeding_item', {
-        day: weekday,
-        time: editData.time,
-        amount: editData.amount,
-        name: editData.name,
-      });
-      console.log('[PetkitSoloCard] 保存新计划成功');
-      this._pendingPlanChanges.delete(editData.itemId);
-      this.requestUpdate();
-    } catch (error) {
-      console.error('[PetkitSoloCard] 保存新计划失败:', error);
-    }
-  }
-
-static styles = combineStyles();
+  static styles = combineStyles();
 }
 
 // 显式注册自定义元素

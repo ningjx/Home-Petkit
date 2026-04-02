@@ -6,6 +6,44 @@ import { PendingChange } from '../data';
 import { getTodayWeekdayNumber } from '../utils';
 
 /**
+ * 批量保存喂食计划
+ * @param items 完整的计划列表
+ * @param days 要更新的周天，默认 "1,2,3,4,5,6,7"（整周同步）
+ */
+export async function saveFeed(
+  hass: HomeAssistant,
+  items: Array<{ time: string; amount: number; name: string; enabled?: boolean }>,
+  days: string = "1,2,3,4,5,6,7",
+  pendingChanges?: Map<string, PendingChange>,
+  onSuccess?: () => void,
+  onError?: (error: any) => void
+): Promise<void> {
+  console.log('[PetkitFeeder] 批量保存计划:', {
+    days: days,
+    items: items,
+  });
+
+  try {
+    await hass.callService('petkit_feeder', 'save_feed', {
+      days: days,
+      items: items,
+    });
+    
+    console.log('[PetkitFeeder] 批量保存计划成功');
+    
+    // 清空待提交变更
+    if (pendingChanges) {
+      pendingChanges.clear();
+    }
+    
+    onSuccess?.();
+  } catch (error) {
+    console.error('[PetkitFeeder] 批量保存计划失败:', error);
+    onError?.(error);
+  }
+}
+
+/**
  * 切换计划启用状态
  */
 export async function toggleFeedingItem(

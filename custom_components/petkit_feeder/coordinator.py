@@ -821,6 +821,31 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("更新喂食计划失败: %s", err, exc_info=True)
             return False
 
+    async def save_feed(
+        self,
+        days: list[int],
+        items: list[dict],
+    ) -> bool:
+        """保存喂食计划（批量）."""
+        if not self._api or not self._device:
+            _LOGGER.error("API 或设备实例未初始化")
+            return False
+        
+        try:
+            result = await self._device.save_feed(
+                days=days,
+                items=items,
+                api_client=self._api,
+            )
+            
+            if result:
+                await self.async_request_refresh()
+            
+            return result
+        except Exception as err:
+            _LOGGER.error("保存喂食计划失败: %s", err, exc_info=True)
+            return False
+
     def _parse_feeding_history(self, device_records) -> dict:
         """解析喂食历史记录.
         

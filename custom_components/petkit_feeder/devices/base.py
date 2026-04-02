@@ -179,6 +179,24 @@ class PetkitDevice(ABC):
     
     # ========== 服务方法 ==========
     
+    async def save_feed(
+        self,
+        days: list[int],
+        items: list[dict],
+        api_client: Any,
+    ) -> bool:
+        """保存喂食计划（批量）.
+        
+        Args:
+            days: 要更新的周天列表，如 [1, 2, 3, 4, 5, 6, 7] 或 [1, 3, 5]
+            items: 计划项列表，格式: [{"time": "HH:MM", "amount": 10, "name": "早餐", "enabled": True}, ...]
+            api_client: API 客户端
+            
+        Returns:
+            是否成功
+        """
+        raise NotImplementedError(f"{self.model_name} 不支持保存喂食计划")
+    
     async def add_feeding_item(
         self,
         day: int,

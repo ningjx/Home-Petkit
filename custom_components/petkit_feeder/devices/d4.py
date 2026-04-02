@@ -114,6 +114,43 @@ class D4Device(PetkitDevice):
             headers=headers,
         )
     
+    async def save_feed(
+        self,
+        days: list[int],
+        items: list[dict],
+        api_client: Any,
+    ) -> bool:
+        """保存喂食计划（批量）."""
+        # 1. 转换时间格式并排序
+        today_items = []
+        for item in items:
+            time_seconds = self._parse_time_to_seconds(item["time"])
+            today_items.append({
+                "time": time_seconds,
+                "amount": item.get("amount", 10),
+                "name": item.get("name", ""),
+                "enabled": item.get("enabled", True),
+            })
+        
+        # 2. 按时间排序
+        today_items.sort(key=lambda x: x.get("time", 0))
+        
+        # 3. 为每个指定的周天构建计划
+        feed_daily_list = [
+            self._build_feed_daily_list(day, today_items)
+            for day in days
+        ]
+        
+        # 4. 调用 API 保存
+        await self._save_feed_plan(feed_daily_list, api_client)
+        
+        _LOGGER.info(
+            "保存喂食计划成功: 周%s，共%d项",
+            ",".join(map(str, days)),
+            len(items)
+        )
+        return True
+    
     def _build_feed_daily_list(
         self,
         day: int,
@@ -127,6 +164,7 @@ class D4Device(PetkitDevice):
             total_amount += amount
             time_seconds = item.get("time", 0)
             is_first = len(items_data) == 0
+            enabled = item.get("enabled", True)
             
             items_data.append({
                 "amount": amount,
@@ -138,6 +176,7 @@ class D4Device(PetkitDevice):
                 "name": item.get("name", ""),
                 "petAmount": [],
                 "time": time_seconds,
+                "suspended": 0 if enabled else 1,
             })
         
         return {
