@@ -732,6 +732,11 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
             
         Returns:
             是否成功
+            
+        注意：
+            虽然 API 接口接受列表格式，但服务器实际只支持处理单天的计划数据。
+            因此这里只处理传入列表的第一项，其他项暂不处理。
+            保留多天处理逻辑，未来可能需要支持多天批量提交。
         """
         if not self._api or not self._device:
             _LOGGER.error("API 或设备实例未初始化")
@@ -773,8 +778,21 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
             # 
             # complete_plan.sort(key=lambda x: x["day"])
             
+            # 只处理传入列表的第一项（服务器只支持单天提交）
+            if len(weekly_plan) > 0:
+                single_day_plan = weekly_plan[:1]
+                
+                _LOGGER.debug(
+                    "save_feed: 收到 %d 天，只处理第 1 天（day=%d）",
+                    len(weekly_plan),
+                    single_day_plan[0]["day"]
+                )
+            else:
+                _LOGGER.warning("save_feed: 传入的计划列表为空")
+                return False
+            
             result = await self._device.save_feed_weekly(
-                weekly_plan=weekly_plan,
+                weekly_plan=single_day_plan,
                 api_client=self._api,
             )
             
@@ -782,8 +800,9 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
                 await self.async_request_refresh()
             
             _LOGGER.info(
-                "保存喂食计划成功: 传入 %d 天",
-                len(weekly_plan)
+                "保存喂食计划成功: 周%d，共%d项",
+                single_day_plan[0]["day"],
+                len(single_day_plan[0].get("items", []))
             )
             return result
         except Exception as err:

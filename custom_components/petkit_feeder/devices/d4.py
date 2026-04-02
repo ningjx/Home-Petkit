@@ -104,6 +104,16 @@ class D4Device(PetkitDevice):
         api_client: Any,
     ) -> None:
         headers = await api_client.get_session_id()
+        
+        # 调试：打印发送到服务器的完整数据
+        _LOGGER.info(
+            "=== 发送到服务器的喂食计划数据 ===\n"
+            "deviceId: %d\n"
+            "feedDailyList (JSON):\n%s",
+            self._get_device_id(),
+            json.dumps(feed_daily_list, ensure_ascii=False, indent=2)
+        )
+        
         await api_client.req.request(
             method="POST",
             url="d4/saveFeed",
@@ -164,7 +174,6 @@ class D4Device(PetkitDevice):
             total_amount += amount
             time_seconds = item.get("time", 0)
             is_first = len(items_data) == 0
-            enabled = item.get("enabled", True)
             
             items_data.append({
                 "amount": amount,
@@ -176,7 +185,6 @@ class D4Device(PetkitDevice):
                 "name": item.get("name", ""),
                 "petAmount": [],
                 "time": time_seconds,
-                "suspended": 0 if enabled else 1,
             })
         
         return {
@@ -194,14 +202,20 @@ class D4Device(PetkitDevice):
         weekly_plan: list[dict],
         api_client: Any,
     ) -> bool:
-        """保存喂食计划（7天完整数据）.
+        """保存喂食计划（单天数据）.
         
         Args:
-            weekly_plan: 7天完整计划列表，每个元素包含 day, suspended, items
+            weekly_plan: 计划列表（虽然名为 weekly，但服务器只支持单天提交）
+                        每个元素包含 day, suspended, items
             api_client: API 客户端实例
             
         Returns:
             是否成功
+            
+        注意：
+            方法名为 save_feed_weekly 是保留原有命名。
+            实际服务器 API 虽然接受列表格式，但只支持处理单天的计划数据。
+            coordinator.py 已限制只传入第一项，这里保留循环逻辑以便未来扩展。
         """
         feed_daily_list = []
         
@@ -219,7 +233,6 @@ class D4Device(PetkitDevice):
                 amount = item.get("amount", 0)
                 total_amount += amount
                 is_first = len(items_data) == 0
-                enabled = item.get("enabled", True)
                 
                 items_data.append({
                     "amount": amount,
@@ -231,7 +244,6 @@ class D4Device(PetkitDevice):
                     "name": item.get("name", ""),
                     "petAmount": [],
                     "time": time_seconds,
-                    "suspended": 0 if enabled else 1,
                 })
             
             feed_daily_list.append({
@@ -248,7 +260,8 @@ class D4Device(PetkitDevice):
         
         total_items = sum(len(p.get("items", [])) for p in weekly_plan)
         _LOGGER.info(
-            "保存喂食计划成功: 7天，共 %d 项",
+            "保存喂食计划成功: 周%d，共 %d 项",
+            weekly_plan[0]["day"] if weekly_plan else 0,
             total_items
         )
         return True
