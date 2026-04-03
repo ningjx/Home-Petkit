@@ -20,14 +20,14 @@ export const baseStyles = css`
   .weekday-tabs {
     display: flex;
     gap: 4px;
-    padding: 8px 0;
-    margin-bottom: 8px;
+    padding: 4px 0 0 0;
+    margin-bottom: 6px;
     border-bottom: 1px solid var(--divider-color, #e0e0e0);
   }
 
   .weekday-tab {
     flex: 1;
-    padding: 6px 4px;
+    padding: 8px 4px;
     border: 2px solid transparent;
     border-radius: 4px;
     background: transparent;

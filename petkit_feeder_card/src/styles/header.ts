@@ -14,12 +14,13 @@ export const headerStyles = css`
   }
   
   .header-title {
-    font-size: 12px;
+    font-size: 16px;
     font-weight: bold;
   }
   
   .header-date {
-    font-size: 10px;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--secondary-text-color);
     flex: 1;
     text-align: center;
