@@ -256,10 +256,16 @@ export class PetkitFeederCard extends LitElement {
 
     const today = getTodayWeekdayNumber();
     const isToday = this._selectedDay === today;
+    const isPast = this._selectedDay < today;  // 过去的日子
     
-    // 判断是否已过期（今天且时间已过）
+    // 判断是否已过期
+    // - 过去的周天：所有计划都过期
+    // - 今天：时间已过的计划过期
+    // - 未来：都不过期
     let isExpired = false;
-    if (isToday && item.time) {
+    if (isPast) {
+      isExpired = true;
+    } else if (isToday && item.time) {
       const now = new Date();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const [hours, minutes] = item.time.split(':').map(Number);
