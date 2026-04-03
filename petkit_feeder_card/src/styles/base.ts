@@ -47,11 +47,9 @@ export const baseStyles = css`
     font-weight: 500;
   }
 
-  .weekday-tab.today {
-    text-decoration: underline;
-  }
-
-  .weekday-tab.active.today {
-    text-decoration: none;
+  /* 今天项：绘制空心框（当选中项不是今天时） */
+  .weekday-tab.today:not(.active) {
+    border: 2px solid var(--primary-color, #03a9f4);
+    box-sizing: border-box;
   }
 `;
