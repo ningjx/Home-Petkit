@@ -28,7 +28,7 @@ export function processWeeklyData(
     const records = parseDayRecords(historyAttrs, dateStr);
     
     const timeline = mergeTimeline(planData.items, records);
-    const summary = calculateSummary(historyAttrs, timeline);
+    const summary = calculateSummary(historyAttrs, dateStr, timeline);
 
     days.set(day, {
       day,
