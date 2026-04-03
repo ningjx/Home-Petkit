@@ -3,16 +3,27 @@
 import { TimelineItem, TodaySummary } from '../types';
 
 /**
- * 从属性和历史数据计算今日统计
+ * 从喂食记录传感器中读取指定日期的统计数据
  * @param historyAttrs 喂食历史实体属性
+ * @param dateStr 日期字符串 (YYYY-MM-DD)
  * @param timeline 时间线数据
- * @returns 今日统计
+ * @returns 统计数据
  */
-export function calculateSummary(historyAttrs: any, timeline: TimelineItem[]): TodaySummary {
-  const planAmount = historyAttrs.today_plan_amount || 0;
-  const actualAmount = historyAttrs.today_real_amount || 0;
-  const totalCount = historyAttrs.today_count || timeline.length;
-  const completedCount = historyAttrs.today_completed_count || timeline.filter(item => item.isExecuted).length;
+export function calculateSummary(
+  historyAttrs: any,
+  dateStr: string,
+  timeline: TimelineItem[]
+): TodaySummary {
+  // 从喂食记录传感器读取对应日期的数据
+  const records = historyAttrs.records || {};
+  const dayData = records[dateStr] || {};
+  
+  const planAmount = dayData.plan_amount || 0;
+  const actualAmount = dayData.real_amount || 0;
+  const manualAmount = dayData.add_amount || 0;
+  
+  const totalCount = dayData.times || timeline.length;
+  const completedCount = timeline.filter(item => item.isExecuted).length;
   const pendingCount = totalCount - completedCount;
 
   const isOnline = timeline.length > 0;
@@ -23,10 +34,6 @@ export function calculateSummary(historyAttrs: any, timeline: TimelineItem[]): T
         current.completedAt! > latest.completedAt! ? current : latest
       )
     : undefined;
-
-  const manualAmount = timeline
-    .filter(item => item.itemType === 'manual' && item.isExecuted)
-    .reduce((sum, item) => sum + (item.actualAmount || 0), 0);
 
   return {
     planAmount,

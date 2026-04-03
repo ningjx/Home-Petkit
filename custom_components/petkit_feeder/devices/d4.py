@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -104,6 +104,16 @@ class D4Device(PetkitDevice):
         api_client: Any,
     ) -> None:
         headers = await api_client.get_session_id()
+        
+        # 调试：打印发送到服务器的完整数据
+        _LOGGER.info(
+            "=== 发送到服务器的喂食计划数据 ===\n"
+            "deviceId: %d\n"
+            "feedDailyList (JSON):\n%s",
+            self._get_device_id(),
+            json.dumps(feed_daily_list, ensure_ascii=False, indent=2)
+        )
+        
         await api_client.req.request(
             method="POST",
             url="d4/saveFeed",
@@ -113,6 +123,43 @@ class D4Device(PetkitDevice):
             },
             headers=headers,
         )
+    
+    async def save_feed(
+        self,
+        days: list[int],
+        items: list[dict],
+        api_client: Any,
+    ) -> bool:
+        """保存喂食计划（批量）."""
+        # 1. 转换时间格式并排序
+        today_items = []
+        for item in items:
+            time_seconds = self._parse_time_to_seconds(item["time"])
+            today_items.append({
+                "time": time_seconds,
+                "amount": item.get("amount", 10),
+                "name": item.get("name", ""),
+                "enabled": item.get("enabled", True),
+            })
+        
+        # 2. 按时间排序
+        today_items.sort(key=lambda x: x.get("time", 0))
+        
+        # 3. 为每个指定的周天构建计划
+        feed_daily_list = [
+            self._build_feed_daily_list(day, today_items)
+            for day in days
+        ]
+        
+        # 4. 调用 API 保存
+        await self._save_feed_plan(feed_daily_list, api_client)
+        
+        _LOGGER.info(
+            "保存喂食计划成功: 周%s，共%d项",
+            ",".join(map(str, days)),
+            len(items)
+        )
+        return True
     
     def _build_feed_daily_list(
         self,
@@ -150,211 +197,73 @@ class D4Device(PetkitDevice):
             "totalAmount2": 0,
         }
     
-    async def add_feeding_item(
+    async def save_feed_weekly(
         self,
-        day: int,
-        time: str,
-        amount: int,
-        name: str,
+        weekly_plan: list[dict],
         api_client: Any,
-        sync_all_days: bool = True,
-        existing_feed_daily_list: list | None = None,
     ) -> bool:
-        time_seconds = self._parse_time_to_seconds(time)
+        """保存喂食计划（单天数据）.
         
-        today_items = []
-        if existing_feed_daily_list:
-            for daily_list in existing_feed_daily_list:
-                if str(daily_list.get("repeats", "")) == str(day):
-                    today_items = [
-                        {
-                            "time": item.get("time", 0),
-                            "amount": item.get("amount", 0),
-                            "name": item.get("name", ""),
-                        }
-                        for item in daily_list.get("items", [])
-                    ]
-                    break
+        Args:
+            weekly_plan: 计划列表（虽然名为 weekly，但服务器只支持单天提交）
+                        每个元素包含 day, suspended, items
+            api_client: API 客户端实例
+            
+        Returns:
+            是否成功
+            
+        注意：
+            方法名为 save_feed_weekly 是保留原有命名。
+            实际服务器 API 虽然接受列表格式，但只支持处理单天的计划数据。
+            coordinator.py 已限制只传入第一项，这里保留循环逻辑以便未来扩展。
+        """
+        feed_daily_list = []
         
-        for item in today_items:
-            if item.get("time") == time_seconds:
-                _LOGGER.warning("该时间点已存在计划项: %s", time)
-                return False
-        
-        today_items.append({
-            "time": time_seconds,
-            "amount": amount,
-            "name": name or "",
-        })
-        today_items.sort(key=lambda x: x.get("time", 0))
-        
-        if sync_all_days:
-            feed_daily_list = [
-                self._build_feed_daily_list(target_day, today_items)
-                for target_day in range(1, 8)
-            ]
-        else:
-            feed_daily_list = list(existing_feed_daily_list or [])
-            for daily_list in feed_daily_list:
-                if str(daily_list.get("repeats", "")) == str(day):
-                    daily_list["items"] = [
-                        {
-                            "amount": item.get("amount"),
-                            "amount1": 0,
-                            "amount2": 0,
-                            "deviceId": 0 if idx > 0 else self._get_device_id(),
-                            "deviceType": 0 if idx > 0 else self._get_device_type_id(),
-                            "id": item.get("time"),
-                            "name": item.get("name", ""),
-                            "petAmount": [],
-                            "time": item.get("time"),
-                        }
-                        for idx, item in enumerate(today_items)
-                    ]
-                    daily_list["totalAmount"] = sum(item.get("amount", 0) for item in today_items)
-                    break
+        for day_plan in weekly_plan:
+            day = day_plan["day"]
+            items = day_plan.get("items", [])
+            suspended = day_plan.get("suspended", 0)
+            
+            items_data = []
+            total_amount = 0
+            
+            for item in items:
+                time_str = item.get("time", "00:00")
+                time_seconds = self._parse_time_to_seconds(time_str)
+                amount = item.get("amount", 0)
+                total_amount += amount
+                is_first = len(items_data) == 0
+                
+                items_data.append({
+                    "amount": amount,
+                    "amount1": 0,
+                    "amount2": 0,
+                    "deviceId": self._get_device_id() if is_first else 0,
+                    "deviceType": self._get_device_type_id() if is_first else 0,
+                    "id": time_seconds,
+                    "name": item.get("name", ""),
+                    "petAmount": [],
+                    "time": time_seconds,
+                })
+            
+            feed_daily_list.append({
+                "count": len(items_data),
+                "items": items_data,
+                "repeats": str(day),
+                "suspended": suspended,
+                "totalAmount": total_amount,
+                "totalAmount1": 0,
+                "totalAmount2": 0,
+            })
         
         await self._save_feed_plan(feed_daily_list, api_client)
-        _LOGGER.info("新增喂食计划成功: %s %dg", time, amount)
-        return True
-    
-    async def remove_feeding_item(
-        self,
-        day: int,
-        item_id: str,
-        api_client: Any,
-        sync_all_days: bool = True,
-        existing_feed_daily_list: list | None = None,
-    ) -> bool:
-        raw_item_id = item_id.lstrip("s") if item_id.startswith("s") else item_id
         
-        today_items = []
-        if existing_feed_daily_list:
-            for daily_list in existing_feed_daily_list:
-                if str(daily_list.get("repeats", "")) == str(day):
-                    today_items = [
-                        {
-                            "time": item.get("time", 0),
-                            "amount": item.get("amount", 0),
-                            "name": item.get("name", ""),
-                        }
-                        for item in daily_list.get("items", [])
-                    ]
-                    break
-        
-        new_today_items = [
-            item for item in today_items
-            if str(item.get("time", "")) != raw_item_id
-        ]
-        
-        if len(new_today_items) == len(today_items):
-            _LOGGER.warning("未找到要删除的计划项: %s", item_id)
-            return False
-        
-        if sync_all_days:
-            feed_daily_list = [
-                self._build_feed_daily_list(target_day, new_today_items)
-                for target_day in range(1, 8)
-            ]
-        else:
-            feed_daily_list = list(existing_feed_daily_list or [])
-            for daily_list in feed_daily_list:
-                if str(daily_list.get("repeats", "")) == str(day):
-                    daily_list["items"] = [
-                        {
-                            "amount": item.get("amount"),
-                            "amount1": 0,
-                            "amount2": 0,
-                            "deviceId": 0 if idx > 0 else self._get_device_id(),
-                            "deviceType": 0 if idx > 0 else self._get_device_type_id(),
-                            "id": item.get("time"),
-                            "name": item.get("name", ""),
-                            "petAmount": [],
-                            "time": item.get("time"),
-                        }
-                        for idx, item in enumerate(new_today_items)
-                    ]
-                    daily_list["totalAmount"] = sum(item.get("amount", 0) for item in new_today_items)
-                    break
-        
-        await self._save_feed_plan(feed_daily_list, api_client)
-        _LOGGER.info("删除喂食计划成功: %s", item_id)
-        return True
-    
-    async def update_feeding_item(
-        self,
-        day: int,
-        item_id: str,
-        time: str | None,
-        amount: int | None,
-        name: str | None,
-        api_client: Any,
-        sync_all_days: bool = True,
-        existing_feed_daily_list: list | None = None,
-    ) -> bool:
-        raw_item_id = item_id.lstrip("s") if item_id.startswith("s") else item_id
-        
-        today_items = []
-        if existing_feed_daily_list:
-            for daily_list in existing_feed_daily_list:
-                if str(daily_list.get("repeats", "")) == str(day):
-                    today_items = [
-                        {
-                            "time": item.get("time", 0),
-                            "amount": item.get("amount", 0),
-                            "name": item.get("name", ""),
-                        }
-                        for item in daily_list.get("items", [])
-                    ]
-                    break
-        
-        found = False
-        for i, item in enumerate(today_items):
-            if str(item.get("time", "")) == raw_item_id:
-                found = True
-                new_time = self._parse_time_to_seconds(time) if time else item.get("time")
-                new_amount = amount if amount is not None else item.get("amount")
-                new_name = name if name is not None else item.get("name", "")
-                today_items[i] = {
-                    "time": new_time,
-                    "amount": new_amount,
-                    "name": new_name,
-                }
-                today_items.sort(key=lambda x: x.get("time", 0))
-                break
-        
-        if not found:
-            _LOGGER.warning("未找到计划项: 周%d %s", day, item_id)
-            return False
-        
-        if sync_all_days:
-            feed_daily_list = [
-                self._build_feed_daily_list(target_day, today_items)
-                for target_day in range(1, 8)
-            ]
-        else:
-            feed_daily_list = list(existing_feed_daily_list or [])
-            for daily_list in feed_daily_list:
-                if str(daily_list.get("repeats", "")) == str(day):
-                    daily_list["items"] = [
-                        {
-                            "amount": item.get("amount"),
-                            "amount1": 0,
-                            "amount2": 0,
-                            "deviceId": 0 if idx > 0 else self._get_device_id(),
-                            "deviceType": 0 if idx > 0 else self._get_device_type_id(),
-                            "id": item.get("time"),
-                            "name": item.get("name", ""),
-                            "petAmount": [],
-                            "time": item.get("time"),
-                        }
-                        for idx, item in enumerate(today_items)
-                    ]
-                    daily_list["totalAmount"] = sum(item.get("amount", 0) for item in today_items)
-                    break
-        
-        await self._save_feed_plan(feed_daily_list, api_client)
-        _LOGGER.info("更新喂食计划成功: %s", item_id)
+        total_items = sum(len(p.get("items", [])) for p in weekly_plan)
+        _LOGGER.info(
+            "保存喂食计划成功: 周%d，共 %d 项",
+            weekly_plan[0]["day"] if weekly_plan else 0,
+            total_items
+        )
         return True
     
     async def toggle_feeding_item(
@@ -364,23 +273,29 @@ class D4Device(PetkitDevice):
         enabled: bool,
         api_client: Any,
     ) -> bool:
-        today = int(datetime.now().strftime("%Y%m%d"))
+        # 将周几转换为日期（YYYYMMDD）
+        now = datetime.now()
+        current_weekday = now.weekday() + 1  # 1=周一, 7=周日
+        days_diff = day - current_weekday
+        target_date = now + timedelta(days=days_diff)
+        date_int = int(target_date.strftime("%Y%m%d"))
+        
         headers = await api_client.get_session_id()
         
         if enabled:
             await api_client.req.request(
                 method="POST",
-                url=f"d4/restoreDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={today}",
+                url=f"d4/restoreDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={date_int}",
                 headers=headers,
             )
-            _LOGGER.info("恢复喂食计划: 周%d %s", day, item_id)
+            _LOGGER.info("恢复喂食计划: 周%d %s (日期: %d)", day, item_id, date_int)
         else:
             await api_client.req.request(
                 method="POST",
-                url=f"d4/removeDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={today}",
+                url=f"d4/removeDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={date_int}",
                 headers=headers,
             )
-            _LOGGER.info("禁用喂食计划: 周%d %s", day, item_id)
+            _LOGGER.info("禁用喂食计划: 周%d %s (日期: %d)", day, item_id, date_int)
         
         return True
     

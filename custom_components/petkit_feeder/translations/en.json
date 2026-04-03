@@ -62,8 +62,8 @@
       "feeding_schedule": {
         "name": "Feeding Schedule"
       },
-      "feeding_history": {
-        "name": "Feeding History"
+      "feeding_records": {
+        "name": "Feeding Records"
       },
       "real_amount_total": {
         "name": "Real Amount Total"

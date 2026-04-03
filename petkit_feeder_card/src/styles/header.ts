@@ -8,26 +8,32 @@ export const headerStyles = css`
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 3px;
     padding-bottom: 6px;
     border-bottom: 1px solid var(--divider-color);
+    position: relative;
   }
   
   .header-title {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: bold;
+    z-index: 1;
   }
   
   .header-date {
-    font-size: 10px;
+    font-size: 12px;
+    font-weight: bold;
     color: var(--secondary-text-color);
-    flex: 1;
-    text-align: center;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
   }
   
   .header-actions {
     display: flex;
     align-items: center;
     gap: 6px;
+    margin-left: auto;
+    z-index: 1;
   }
 `;

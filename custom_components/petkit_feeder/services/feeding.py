@@ -68,9 +68,13 @@ class FeedingService:
             
             # 调用协调器方法
             method = getattr(coordinator, service_name)
-            await method(**params)
+            result = await method(**params)
             
-            _LOGGER.info("服务调用成功: %s", service_name)
+            # 根据返回值记录日志
+            if result is False:
+                _LOGGER.error("服务调用失败: %s", service_name)
+            else:
+                _LOGGER.info("服务调用成功: %s", service_name)
         
         return handler
     
@@ -82,14 +86,10 @@ class FeedingService:
         """
         for service_name, schema in schemas.items():
             # 确定参数键
-            if service_name == "add_feeding_item":
-                param_keys = ["day", "time", "amount", "name"]
-            elif service_name == "remove_feeding_item":
-                param_keys = ["day", "item_id"]
+            if service_name == "save_feed":
+                param_keys = ["weekly_plan"]
             elif service_name == "toggle_feeding_item":
                 param_keys = ["day", "item_id", "enabled"]
-            elif service_name == "update_feeding_item":
-                param_keys = ["day", "item_id", "time", "amount", "name"]
             else:
                 param_keys = []
             

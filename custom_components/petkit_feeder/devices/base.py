@@ -179,81 +179,39 @@ class PetkitDevice(ABC):
     
     # ========== 服务方法 ==========
     
-    async def add_feeding_item(
+    async def save_feed(
         self,
-        day: int,
-        time: str,
-        amount: int,
-        name: str,
+        days: list[int],
+        items: list[dict],
         api_client: Any,
-        sync_all_days: bool = True,
-        existing_feed_daily_list: list | None = None,
     ) -> bool:
-        """添加喂食计划项.
+        """保存喂食计划（批量）.
         
         Args:
-            day: 星期几（1-7）
-            time: 时间（HH:MM）
-            amount: 出粮量
-            name: 计划名称
+            days: 要更新的周天列表，如 [1, 2, 3, 4, 5, 6, 7] 或 [1, 3, 5]
+            items: 计划项列表，格式: [{"time": "HH:MM", "amount": 10, "name": "早餐", "enabled": True}, ...]
             api_client: API 客户端
-            sync_all_days: 是否同步到一周所有天
-            existing_feed_daily_list: 已有的喂食计划列表
             
         Returns:
             是否成功
         """
-        raise NotImplementedError(f"{self.model_name} 不支持添加喂食计划")
+        raise NotImplementedError(f"{self.model_name} 不支持保存喂食计划")
     
-    async def update_feeding_item(
+    async def save_feed_weekly(
         self,
-        day: int,
-        item_id: str,
-        time: str | None,
-        amount: int | None,
-        name: str | None,
+        weekly_plan: list[dict],
         api_client: Any,
-        sync_all_days: bool = True,
-        existing_feed_daily_list: list | None = None,
     ) -> bool:
-        """更新喂食计划项.
+        """保存喂食计划（7天完整数据）.
         
         Args:
-            day: 星期几（1-7）
-            item_id: 计划项 ID
-            time: 时间（HH:MM）
-            amount: 出粮量
-            name: 计划名称
+            weekly_plan: 7天完整计划列表，每个元素包含 day, suspended, items
             api_client: API 客户端
-            sync_all_days: 是否同步到一周所有天
-            existing_feed_daily_list: 已有的喂食计划列表
             
         Returns:
             是否成功
         """
-        raise NotImplementedError(f"{self.model_name} 不支持更新喂食计划")
-    
-    async def remove_feeding_item(
-        self,
-        day: int,
-        item_id: str,
-        api_client: Any,
-        sync_all_days: bool = True,
-        existing_feed_daily_list: list | None = None,
-    ) -> bool:
-        """删除喂食计划项.
-        
-        Args:
-            day: 星期几（1-7）
-            item_id: 计划项 ID
-            api_client: API 客户端
-            sync_all_days: 是否同步到一周所有天
-            existing_feed_daily_list: 已有的喂食计划列表
-            
-        Returns:
-            是否成功
-        """
-        raise NotImplementedError(f"{self.model_name} 不支持删除喂食计划")
+        raise NotImplementedError(f"{self.model_name} 不支持保存喂食计划")
     
     async def toggle_feeding_item(
         self,

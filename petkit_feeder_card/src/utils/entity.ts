@@ -5,7 +5,7 @@ import { PetkitSoloCardConfig } from '../types';
 /**
  * 根据设备 ID 和实体类型推断实体 ID
  * @param config 卡片配置
- * @param entityType 实体类型（如 'feeding_schedule', 'feeding_history'）
+ * @param entityType 实体类型（如 'feeding_schedule', 'feeding_records'）
  * @returns 完整的实体 ID
  */
 export function getEntityId(config: PetkitSoloCardConfig, entityType: string): string {
@@ -24,10 +24,10 @@ export function getPlanEntityId(config: PetkitSoloCardConfig): string {
 }
 
 /**
- * 获取喂食历史实体 ID
+ * 获取喂食记录实体 ID
  */
 export function getHistoryEntityId(config: PetkitSoloCardConfig): string {
-  return config.history_entity || getEntityId(config, 'feeding_history');
+  return config.history_entity || getEntityId(config, 'feeding_records');
 }
 
 /**

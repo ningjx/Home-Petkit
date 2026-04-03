@@ -30,7 +30,7 @@ async def async_setup_entry(
         PetkitLastAmountSensor(coordinator, config_entry),
         PetkitTodayCountSensor(coordinator, config_entry),
         PetkitFeedingScheduleSensor(coordinator, config_entry),
-        PetkitFeedingHistorySensor(coordinator, config_entry),
+        PetkitFeedingRecordsSensor(coordinator, config_entry),
     ]
     
     # 添加喂食统计传感器（如果设备支持）
@@ -395,25 +395,27 @@ class PetkitFeedingScheduleSensor(PetkitSensorBase):
                         "time": time_str,
                         "name": name,
                         "amount": amount,
-                        "suspended": suspended,
                     })
 
-            schedule[weekday_name] = schedule_items
+            schedule[weekday_name] = {
+                "suspended": suspended,
+                "items": schedule_items,
+            }
 
         return {
             "schedule": schedule,
         }
 
 
-class PetkitFeedingHistorySensor(PetkitSensorBase):
-    """喂食历史传感器."""
+class PetkitFeedingRecordsSensor(PetkitSensorBase):
+    """喂食记录传感器."""
 
-    _attr_translation_key = "feeding_history"
+    _attr_translation_key = "feeding_records"
     _attr_icon = "mdi:history"
 
     @property
     def native_value(self) -> str:
-        """返回上次喂食时间."""
+        """返回本周最新喂食时间."""
         device = self._get_device()
         if not device:
             return "离线"
@@ -454,7 +456,7 @@ class PetkitFeedingHistorySensor(PetkitSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict:
-        """返回喂食历史的详细数据."""
+        """返回本周喂食记录的详细数据."""
         device = self._get_device()
         if not device:
             return {}
@@ -465,7 +467,10 @@ class PetkitFeedingHistorySensor(PetkitSensorBase):
         
         today_str = datetime.now().strftime("%Y%m%d")
         
-        by_date = {}
+        records = {}
+        week_plan_amount = 0
+        week_real_amount = 0
+        week_completed_count = 0
         today_plan_amount = 0
         today_real_amount = 0
         today_count = 0
@@ -475,16 +480,19 @@ class PetkitFeedingHistorySensor(PetkitSensorBase):
         if feed_records:
             for record in feed_records:
                 day = getattr(record, "day", None)
+                if not day:
+                    continue
+                    
                 items = getattr(record, "items", [])
-                plan_amount = getattr(record, "plan_amount", 0)
-                real_amount = getattr(record, "real_amount", 0)
+                plan_amount = getattr(record, "plan_amount", 0) or 0
+                real_amount = getattr(record, "real_amount", 0) or 0
+                add_amount = getattr(record, "add_amount", 0) or 0
+                times = getattr(record, "times", 0) or 0
                 
-                day_str = str(day) if day else "未知"
+                day_str = str(day)
                 date_key = f"{day_str[:4]}-{day_str[4:6]}-{day_str[6:8]}" if len(day_str) == 8 else day_str
                 
-                if date_key not in by_date:
-                    by_date[date_key] = []
-                
+                items_list = []
                 for item in items:
                     time_seconds = getattr(item, "time", 0)
                     hours = time_seconds // 3600
@@ -501,32 +509,55 @@ class PetkitFeedingHistorySensor(PetkitSensorBase):
                     state = getattr(item, "state", None)
                     real_amt = getattr(state, "real_amount", None) if state else None
                     completed_at = getattr(state, "completed_at", None) if state else None
+                    err_code = getattr(state, "err_code", None) if state else None
+                    result = getattr(state, "result", None) if state else None
                     is_completed = completed_at is not None
                     
-                    by_date[date_key].append({
+                    items_list.append({
                         "id": item_id,
                         "time": time_str,
                         "name": name,
                         "amount": amount,
-                        "real_amount": real_amt,
+                        "src": src,
                         "status": status,
                         "is_executed": is_executed,
-                        "is_completed": is_completed,
-                        "completed_at": completed_at,
-                        "src": src,
+                        "state": {
+                            "real_amount": real_amt,
+                            "completed_at": completed_at,
+                            "err_code": err_code,
+                            "result": result,
+                        } if state else None,
                     })
+                    
+                    if is_completed:
+                        week_completed_count += 1
+                
+                records[date_key] = {
+                    "day": day,
+                    "plan_amount": plan_amount,
+                    "add_amount": add_amount,
+                    "real_amount": real_amount,
+                    "times": times,
+                    "items": items_list,
+                }
+                
+                week_plan_amount += plan_amount
+                week_real_amount += real_amount
                 
                 if str(day) == today_str:
-                    today_plan_amount = plan_amount or 0
-                    today_real_amount = real_amount or 0
+                    today_plan_amount = plan_amount
+                    today_real_amount = real_amount
                     today_count = len(items)
-                    today_completed_count = sum(1 for i in items if getattr(getattr(i, "state", None), "completed_at", None))
-        
-        total_records = sum(len(records) for records in by_date.values())
+                    today_completed_count = sum(
+                        1 for i in items 
+                        if getattr(getattr(i, "state", None), "completed_at", None)
+                    )
         
         attributes = {
-            "history": by_date,
-            "total_records": total_records,
+            "records": records,
+            "week_plan_amount": week_plan_amount,
+            "week_real_amount": week_real_amount,
+            "week_completed_count": week_completed_count,
             "today_plan_amount": today_plan_amount,
             "today_real_amount": today_real_amount,
             "today_count": today_count,
