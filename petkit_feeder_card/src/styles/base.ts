@@ -28,13 +28,14 @@ export const baseStyles = css`
   .weekday-tab {
     flex: 1;
     padding: 6px 4px;
-    border: none;
+    border: 2px solid transparent;
     border-radius: 4px;
     background: transparent;
     color: var(--secondary-text-color, #757575);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-sizing: border-box;
   }
 
   .weekday-tab:hover {
@@ -43,13 +44,13 @@ export const baseStyles = css`
 
   .weekday-tab.active {
     background: var(--primary-color, #03a9f4);
+    border-color: var(--primary-color, #03a9f4);
     color: white;
     font-weight: 500;
   }
 
   /* 今天项：绘制空心框（当选中项不是今天时） */
   .weekday-tab.today:not(.active) {
-    border: 2px solid var(--primary-color, #03a9f4);
-    box-sizing: border-box;
+    border-color: var(--primary-color, #03a9f4);
   }
 `;
