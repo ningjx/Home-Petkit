@@ -256,8 +256,8 @@ export class PetkitFeederCard extends LitElement {
 
     const today = getTodayWeekdayNumber();
     const isToday = this._selectedDay === today;
-    const canToggle = item.itemType === 'plan' && !item.isExecuted && isToday;
-    const canDeleteBtn = item.itemType === 'plan' && item.canDelete && !item.isExecuted;
+    const canToggle = item.itemType === 'plan' && item.canDisable;
+    const canDeleteBtn = item.itemType === 'plan' && item.canDelete;
     const canEdit = item.itemType === 'plan';
 
     const timeEl = editField === 'time' && this._editingItem

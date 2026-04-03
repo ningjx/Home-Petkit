@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -273,23 +273,29 @@ class D4Device(PetkitDevice):
         enabled: bool,
         api_client: Any,
     ) -> bool:
-        today = int(datetime.now().strftime("%Y%m%d"))
+        # 将周几转换为日期（YYYYMMDD）
+        now = datetime.now()
+        current_weekday = now.weekday() + 1  # 1=周一, 7=周日
+        days_diff = day - current_weekday
+        target_date = now + timedelta(days=days_diff)
+        date_int = int(target_date.strftime("%Y%m%d"))
+        
         headers = await api_client.get_session_id()
         
         if enabled:
             await api_client.req.request(
                 method="POST",
-                url=f"d4/restoreDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={today}",
+                url=f"d4/restoreDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={date_int}",
                 headers=headers,
             )
-            _LOGGER.info("恢复喂食计划: 周%d %s", day, item_id)
+            _LOGGER.info("恢复喂食计划: 周%d %s (日期: %d)", day, item_id, date_int)
         else:
             await api_client.req.request(
                 method="POST",
-                url=f"d4/removeDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={today}",
+                url=f"d4/removeDailyFeed?id={item_id}&deviceId={self._get_device_id()}&day={date_int}",
                 headers=headers,
             )
-            _LOGGER.info("禁用喂食计划: 周%d %s", day, item_id)
+            _LOGGER.info("禁用喂食计划: 周%d %s (日期: %d)", day, item_id, date_int)
         
         return True
     
