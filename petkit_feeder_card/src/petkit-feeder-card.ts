@@ -256,7 +256,18 @@ export class PetkitFeederCard extends LitElement {
 
     const today = getTodayWeekdayNumber();
     const isToday = this._selectedDay === today;
-    const canToggle = item.itemType === 'plan' && item.canDisable;
+    
+    // 判断是否已过期（今天且时间已过）
+    let isExpired = false;
+    if (isToday && item.time) {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const [hours, minutes] = item.time.split(':').map(Number);
+      const planMinutes = hours * 60 + minutes;
+      isExpired = planMinutes < currentMinutes;
+    }
+    
+    const canToggle = item.itemType === 'plan' && item.canDisable && !isExpired;
     const canDeleteBtn = item.itemType === 'plan' && item.canDelete;
     const canEdit = item.itemType === 'plan';
 
@@ -315,7 +326,7 @@ export class PetkitFeederCard extends LitElement {
                   <div 
                     class="toggle-switch ${item.isEnabled ? 'on' : 'off'} ${!canToggle ? 'disabled' : ''}"
                     @click=${canToggle ? () => this._handleToggle(item) : undefined}
-                    title="${item.itemType === 'deleted_plan' ? '已删除计划' : (item.isExecuted ? '已执行' : (isToday ? (item.isEnabled ? '点击禁用' : '点击启用') : '已过期'))}"
+                    title="${item.itemType === 'deleted_plan' ? '已删除计划' : (isExpired ? '已过期' : (item.isExecuted ? '已执行' : (item.isEnabled ? '点击禁用' : '点击启用')))}"
                   >
                     <div class="toggle-thumb"></div>
                   </div>
