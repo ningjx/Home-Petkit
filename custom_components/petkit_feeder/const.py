@@ -27,4 +27,4 @@ REGION_TIMEZONE_MAP = {
 }
 DEFAULT_TIMEZONE = "Asia/Shanghai"
 
-PLAN_REFRESH_DELAY = 120  # 计划时间后延迟刷新的秒数
+PLAN_REFRESH_DELAY = 60  # 计划时间后延迟刷新的秒数
