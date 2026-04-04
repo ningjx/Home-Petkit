@@ -303,6 +303,7 @@ class PetkitFeedingScheduleSensor(PetkitSensorBase):
         current_weekday = now.weekday() + 1  # Monday=1, Sunday=7
         current_time = now.strftime("%H:%M")
         current_seconds = now.hour * 3600 + now.minute * 60
+        today_date = int(now.strftime("%Y%m%d"))  # 今天的日期，如 20260404
         
         today_items = []
         for daily_list in feed_daily_list:
@@ -323,6 +324,11 @@ class PetkitFeedingScheduleSensor(PetkitSensorBase):
                         feed_records = getattr(device_records, "feed", None)
                         if feed_records:
                             for record in feed_records:
+                                # 只处理今天的记录
+                                record_day = getattr(record, "day", None)
+                                if record_day != today_date:
+                                    continue
+                                    
                                 record_items = getattr(record, "items", [])
                                 for ri in record_items:
                                     ri_time = getattr(ri, "time", None)
