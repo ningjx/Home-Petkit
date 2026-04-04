@@ -22,6 +22,8 @@ from .const import (
     REFRESH_MODE_MANUAL,
     REGION_TIMEZONE_MAP,
     DEFAULT_TIMEZONE,
+    REGION_LOCALE_MAP,
+    DEFAULT_LOCALE,
     PLAN_REFRESH_DELAY,
 )
 from .coordinators.rate_limiter import RateLimiter
@@ -56,10 +58,12 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
         self._feed_amount: int = 10
         self._timezone: float = 8.0
         self._timezone_str: str = "Asia/Shanghai"
+        self._locale: str = "zh_CN"
         self._plan_refresh_unsub: Any = None
         self._device: PetkitDevice | None = None
         
         self._init_timezone()
+        self._init_locale()
         
         # aiohttp 会话
         self._session: aiohttp.ClientSession | None = None
@@ -124,6 +128,18 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
 
+    def _init_locale(self) -> None:
+        """初始化语言设置（根据区域）."""
+        self._locale = REGION_LOCALE_MAP.get(self._region, DEFAULT_LOCALE)
+        
+        _LOGGER.info(
+            "=== 语言初始化 ===\n"
+            "用户地区：%s\n"
+            "语言设置：%s",
+            self._region,
+            self._locale
+        )
+
     async def _async_setup(self) -> None:
         """设置协调器（在初次刷新前调用）."""
         # 部分环境下 IPv6 路由不可达，会导致偶发 Network unreachable
@@ -135,6 +151,7 @@ class PetkitDataUpdateCoordinator(DataUpdateCoordinator):
             password=self._password,
             region=self._region,
             timezone=self.hass.config.time_zone or "Asia/Shanghai",
+            locale=self._locale,
             session=self._session,
         )
         _LOGGER.debug("PetKit API 客户端初始化完成")
