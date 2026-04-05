@@ -2,8 +2,6 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   pull_request:
@@ -19,27 +17,6 @@ jobs:
         uses: "hacs/action@main"
         with:
           category: "integration"
-
-  build-zip:
-    runs-on: "ubuntu-latest"
-    needs: validate-hacs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create zip
-        run: |
-          cd custom_components/petkit_feeder
-          zip -r ../../petkit_feeder.zip .
-          cd ../..
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: petkit_feeder
-          path: petkit_feeder.zip
-          retention-days: 90
 
   release:
     runs-on: "ubuntu-latest"
