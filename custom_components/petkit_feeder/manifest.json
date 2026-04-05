@@ -3,7 +3,7 @@
   "name": "小佩喂食器",
   "codeowners": ["@ningjx"],
   "config_flow": true,
-  "documentation": "https://github.com/ningjx/Home-Petkit",
+  "documentation": "https://github.com/ningjx/petkit-feeder",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/ningjx/Home-Petkit/issues",
   "loggers": ["petkit_feeder"],

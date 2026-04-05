@@ -32,7 +32,7 @@ Native Home Assistant integration for PetKit smart feeders.
 ### HACS Installation (Recommended)
 
 1. HACS → Integrations → Explore and download repositories
-2. Add custom repository: `https://github.com/ningjx/Home-Petkit.git`
+2. Add custom repository: `https://github.com/ningjx/petkit-feeder.git`
 3. Search for "Petkit Feeder"
 4. Click download and restart Home Assistant
 5. Settings → Devices & Services → Add Integration → Search for "Petkit"

@@ -32,7 +32,7 @@ Home Assistant 原生集成，支持小佩智能喂食器的完整控制。
 ### HACS 安装（推荐）
 
 1. HACS → 集成 → 探索并下载仓库
-2. 添加自定义仓库：`https://github.com/ningjx/Home-Petkit.git`
+2. 添加自定义仓库：`https://github.com/ningjx/petkit-feeder.git`
 3. 搜索 "小佩喂食器" 或 "Petkit Feeder"
 4. 点击下载并重启 Home Assistant
 5. 设置 → 设备与服务 → 添加集成 → 搜索 "小佩喂食器"
