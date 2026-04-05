@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 使用文档
+    url: https://github.com/ningjx/Home-Petkit#readme
+    about: 查看使用文档和常见问题
+  - name: 💬 讨论
+    url: https://github.com/ningjx/Home-Petkit/discussions
+    about: 参与讨论和交流

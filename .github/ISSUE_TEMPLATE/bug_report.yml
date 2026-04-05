@@ -1,0 +1,80 @@
+name: 🐛 Bug 报告
+description: 报告一个 Bug
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你花时间填写这个 Bug 报告！
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 清晰描述你遇到的问题
+      placeholder: "例如：喂食计划无法保存..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 描述如何复现这个问题
+      placeholder: |
+        1. 打开...
+        2. 点击...
+        3. 看到...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 描述你期望发生什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: |
+        粘贴相关日志（注意隐藏敏感信息）。
+        可以在 Home Assistant 设置 → 系统 → 日志 中找到。
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: 集成版本
+      placeholder: "例如: v1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant 版本
+      placeholder: "例如: 2024.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: 设备型号
+      options:
+        - Fresh Element Solo (D4)
+        - Fresh Element (D3)
+        - Fresh Element Duo (D4s)
+        - Feeder Mini (Mini)
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 其他信息
+      description: 任何其他有助于解决问题的信息
