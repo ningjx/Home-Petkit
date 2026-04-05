@@ -6,7 +6,7 @@
 - **项目名称**: PetKit 喂食器 Home Assistant 集成
 - **版本**: 1.0.0
 - **作者**: @ningjx
-- **仓库**: https://github.com/ningjx/Home-Petkit
+- **仓库**: https://github.com/ningjx/petkit-feeder
 - **支持设备**: Fresh Element Solo (D4)
 
 ### 项目定位

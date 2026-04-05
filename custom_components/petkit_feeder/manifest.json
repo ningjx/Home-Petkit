@@ -5,7 +5,7 @@
   "config_flow": true,
   "documentation": "https://github.com/ningjx/petkit-feeder",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/ningjx/Home-Petkit/issues",
+  "issue_tracker": "https://github.com/ningjx/petkit-feeder/issues",
   "loggers": ["petkit_feeder"],
   "requirements": ["m3u8>=3.0.0"],
   "version": "1.0.0"
